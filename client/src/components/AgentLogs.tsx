@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import type { ReasoningLog } from "@shared/schema";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { BrainCircuit, Activity, LineChart, TrendingUp, TrendingDown, Minus, Fuel, Calendar, Users, Clock, Zap, Target, DollarSign, Armchair, ArrowUp, ArrowDown } from "lucide-react";
+import { BrainCircuit, Activity, LineChart, TrendingUp, TrendingDown, Minus, Fuel, Calendar, Users, Clock, Zap, Target, DollarSign, Armchair, ArrowUp, ArrowDown, Network, ArrowRight, Workflow, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface MultiplierData {
@@ -266,13 +266,86 @@ function MultiplierBreakdown({ multipliers }: { multipliers: Multipliers }) {
   );
 }
 
-function MetadataDisplay({ metadata }: { metadata: unknown }) {
+interface TaskInfo {
+  agent: string;
+  priority: number;
+  reason: string;
+}
+
+interface OrchestratorMetadata {
+  planId?: string;
+  objective?: string;
+  tasks?: TaskInfo[];
+}
+
+function OrchestratorPlanDisplay({ metadata }: { metadata: OrchestratorMetadata }) {
+  if (!metadata.tasks || metadata.tasks.length === 0) return null;
+
+  const getTaskColor = (agent: string) => {
+    const lowerAgent = agent.toLowerCase();
+    if (lowerAgent.includes('objective')) return "bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-300";
+    if (lowerAgent.includes('forecast')) return "bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300";
+    if (lowerAgent.includes('pricing')) return "bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-300";
+    if (lowerAgent.includes('seat') || lowerAgent.includes('allocation')) return "bg-cyan-100 border-cyan-300 text-cyan-700 dark:bg-cyan-900/30 dark:border-cyan-700 dark:text-cyan-300";
+    if (lowerAgent.includes('competitor')) return "bg-rose-100 border-rose-300 text-rose-700 dark:bg-rose-900/30 dark:border-rose-700 dark:text-rose-300";
+    return "bg-slate-100 border-slate-300 text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300";
+  };
+
+  const sortedTasks = [...metadata.tasks].sort((a, b) => a.priority - b.priority);
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="flex items-center gap-2 mb-2">
+        <Workflow className="w-4 h-4 text-purple-500" />
+        <span className="text-xs font-semibold text-foreground/80">A2A Execution Plan:</span>
+        {metadata.planId && (
+          <Badge variant="outline" className="text-[10px] font-mono">
+            {metadata.planId.slice(0, 12)}...
+          </Badge>
+        )}
+      </div>
+      
+      <div className="flex flex-wrap items-center gap-1">
+        {sortedTasks.map((task, idx) => (
+          <div key={idx} className="flex items-center gap-1">
+            <div 
+              className={cn(
+                "px-2 py-1 rounded-md border text-xs font-medium flex items-center gap-1.5",
+                getTaskColor(task.agent)
+              )}
+              title={task.reason}
+              data-testid={`task-${task.agent}`}
+            >
+              <span className="text-[10px] font-bold opacity-60">#{task.priority}</span>
+              <span className="capitalize">{task.agent.replace('_', ' ')}</span>
+            </div>
+            {idx < sortedTasks.length - 1 && (
+              <ArrowRight className="w-3 h-3 text-muted-foreground" />
+            )}
+          </div>
+        ))}
+      </div>
+      
+      {metadata.objective && (
+        <div className="text-xs text-muted-foreground mt-2 p-2 rounded bg-muted/50">
+          <span className="font-semibold">Goal:</span> {metadata.objective}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MetadataDisplay({ metadata, isOrchestrator = false }: { metadata: unknown; isOrchestrator?: boolean }) {
   if (!metadata) return null;
   
   try {
     const meta = typeof metadata === 'string' 
       ? JSON.parse(metadata) 
       : metadata as Record<string, unknown>;
+    
+    if (isOrchestrator && meta.tasks) {
+      return <OrchestratorPlanDisplay metadata={meta as OrchestratorMetadata} />;
+    }
     
     const hasMultipliers = meta.demand || meta.urgency || meta.competition || meta.fuel || meta.seasonality;
     const hasOptimization = (meta.optimization as Record<string, unknown>)?.objective;
@@ -308,22 +381,28 @@ export function AgentLogs({ logs }: AgentLogsProps) {
   const sortedLogs = [...logs].sort((a, b) => new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime());
 
   const getAgentIcon = (name: string) => {
-    switch (name.toLowerCase()) {
-      case 'orchestrator': return <BrainCircuit className="w-3 h-3" />;
-      case 'pricing': return <Activity className="w-3 h-3" />;
-      case 'forecast': return <LineChart className="w-3 h-3" />;
-      default: return <BrainCircuit className="w-3 h-3" />;
-    }
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes('orchestrator')) return <Network className="w-3 h-3" />;
+    if (lowerName.includes('objective')) return <Target className="w-3 h-3" />;
+    if (lowerName.includes('pricing')) return <Activity className="w-3 h-3" />;
+    if (lowerName.includes('forecast')) return <LineChart className="w-3 h-3" />;
+    if (lowerName.includes('seat') || lowerName.includes('allocation')) return <Armchair className="w-3 h-3" />;
+    if (lowerName.includes('competitor')) return <Zap className="w-3 h-3" />;
+    return <BrainCircuit className="w-3 h-3" />;
   };
 
   const getAgentColor = (name: string) => {
-    switch (name.toLowerCase()) {
-      case 'orchestrator': return "bg-indigo-500/10 text-indigo-500 border-indigo-200 dark:border-indigo-800";
-      case 'pricing': return "bg-emerald-500/10 text-emerald-500 border-emerald-200 dark:border-emerald-800";
-      case 'forecast': return "bg-blue-500/10 text-blue-500 border-blue-200 dark:border-blue-800";
-      default: return "bg-slate-500/10 text-slate-500 border-slate-200";
-    }
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes('orchestrator')) return "bg-purple-500/10 text-purple-600 border-purple-300 dark:border-purple-700";
+    if (lowerName.includes('objective')) return "bg-amber-500/10 text-amber-600 border-amber-300 dark:border-amber-700";
+    if (lowerName.includes('pricing')) return "bg-emerald-500/10 text-emerald-600 border-emerald-300 dark:border-emerald-700";
+    if (lowerName.includes('forecast')) return "bg-blue-500/10 text-blue-600 border-blue-300 dark:border-blue-700";
+    if (lowerName.includes('seat') || lowerName.includes('allocation')) return "bg-cyan-500/10 text-cyan-600 border-cyan-300 dark:border-cyan-700";
+    if (lowerName.includes('competitor')) return "bg-rose-500/10 text-rose-600 border-rose-300 dark:border-rose-700";
+    return "bg-slate-500/10 text-slate-600 border-slate-300 dark:border-slate-600";
   };
+
+  const isOrchestratorLog = (name: string) => name.toLowerCase().includes('orchestrator');
 
   return (
     <div className="flex flex-col h-full bg-card rounded-xl border shadow-sm overflow-hidden">
@@ -375,7 +454,7 @@ export function AgentLogs({ logs }: AgentLogsProps) {
                         {log.reasoning}
                       </div>
                       
-                      <MetadataDisplay metadata={log.metadata} />
+                      <MetadataDisplay metadata={log.metadata} isOrchestrator={isOrchestratorLog(log.agentName)} />
                     </div>
                   </div>
                 </motion.div>
