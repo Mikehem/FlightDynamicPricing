@@ -83,7 +83,22 @@ node --version  # Should show v20.x.x
 npm --version
 ```
 
-### Step 3: Install PostgreSQL
+### Step 3: Install PostgreSQL and Create Database
+
+**Option A: Use the automated setup script (recommended)**
+
+```bash
+# Run the database setup script
+chmod +x scripts/setup-db.sh
+
+# With default settings
+./scripts/setup-db.sh
+
+# Or with custom credentials
+DB_NAME=my_pricing_db DB_USER=my_user DB_PASSWORD=my_password ./scripts/setup-db.sh
+```
+
+**Option B: Manual setup**
 
 ```bash
 # Install PostgreSQL
