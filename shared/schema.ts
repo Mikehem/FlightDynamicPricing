@@ -171,3 +171,65 @@ export interface SimulationState {
   logs: ReasoningLog[];
   recentHistory: typeof pricingHistory.$inferSelect[];
 }
+
+// === A2A (Agent-to-Agent) COMMUNICATION PROTOCOL ===
+
+// Available sub-agents that the orchestrator can invoke
+export type SubAgentType = 
+  | 'objective'      // Determines pricing objective
+  | 'forecast'       // Analyzes demand patterns
+  | 'pricing'        // Calculates price multipliers
+  | 'seat_allocation'// Manages seat bucket allocation
+  | 'competitor';    // Monitors competitor pricing
+
+// A2A Message structure for inter-agent communication
+export interface A2AMessage {
+  id: string;
+  from: string;           // Agent sending the message
+  to: string;             // Target agent (or 'orchestrator')
+  type: 'request' | 'response' | 'broadcast';
+  action: string;         // What action is requested/performed
+  payload: Record<string, unknown>;  // Data being passed
+  timestamp: Date;
+}
+
+// Agent task definition for the orchestrator's plan
+export interface AgentTask {
+  agentType: SubAgentType;
+  priority: number;       // Execution order (1 = highest)
+  reason: string;         // Why this agent is needed
+  dependsOn: SubAgentType[]; // Which agents must complete first
+  inputContext: string[];    // What data this agent needs
+}
+
+// Orchestrator's execution plan
+export interface OrchestratorPlan {
+  planId: string;
+  objective: string;      // High-level goal of this orchestration
+  strategy: string;       // Overall approach (e.g., 'aggressive', 'conservative')
+  tasks: AgentTask[];     // Ordered list of agent tasks
+  reasoning: string;      // Why this plan was chosen
+  estimatedImpact: string; // Expected outcome
+}
+
+// Result from a sub-agent after execution
+export interface SubAgentResult {
+  agentType: SubAgentType;
+  success: boolean;
+  decision: string;
+  reasoning: string;
+  output: Record<string, unknown>;
+  a2aMessages: A2AMessage[]; // Messages sent during execution
+}
+
+// Complete orchestration result with A2A trace
+export interface OrchestrationResult {
+  plan: OrchestratorPlan;
+  results: SubAgentResult[];
+  a2aTrace: A2AMessage[];   // Full message trace for transparency
+  finalOutcome: {
+    pricingApplied: boolean;
+    allocationChanged: boolean;
+    summary: string;
+  };
+}
