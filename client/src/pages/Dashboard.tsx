@@ -7,13 +7,15 @@ import { AgentLogs } from "@/components/AgentLogs";
 import { BookingChat } from "@/components/BookingChat";
 import { 
   Calendar, Plane, Users, TrendingUp, Play, RefreshCw, AlertCircle, 
-  Fuel, Target, CloudSun, Trophy, DollarSign, Percent, Clock, Building2
+  Fuel, Target, CloudSun, Trophy, DollarSign, Percent, Clock, Building2, ArrowUp, ArrowDown, Minus
 } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import type { DemandForecastPoint } from "@shared/schema";
 
 interface EnvRowProps {
   label: string;
@@ -260,6 +262,125 @@ export default function Dashboard() {
                   <div className="text-lg font-bold">{daysUntilDeparture}</div>
                 </Card>
               </div>
+            )}
+
+            {/* Demand Forecast Chart */}
+            {state && currentScenario && currentScenario.environment.demandForecast && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4" />
+                    Demand Forecast vs Actual
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    60-day booking window • Day {currentScenario.environment.daysElapsed} of 60
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const forecast = currentScenario.environment.demandForecast;
+                    const daysElapsed = currentScenario.environment.daysElapsed;
+                    const expectedToday = currentScenario.environment.expectedOccupancyToday;
+                    const actualOccupancy = parseFloat(loadFactor);
+                    const diff = actualOccupancy - expectedToday;
+                    const status = diff < -5 ? "below" : diff > 5 ? "above" : "on-track";
+                    
+                    const chartData = forecast.map((p: DemandForecastPoint) => ({
+                      day: p.day,
+                      forecast: p.expectedOccupancy,
+                      actual: p.day <= daysElapsed ? (p.day === daysElapsed || (daysElapsed > 0 && p.day === Math.floor(daysElapsed / 5) * 5) ? actualOccupancy : null) : null
+                    }));
+                    
+                    if (daysElapsed > 0) {
+                      const actualPoint = chartData.find((d: { day: number; forecast: number; actual: number | null }) => d.day === Math.floor(daysElapsed / 5) * 5);
+                      if (actualPoint) actualPoint.actual = actualOccupancy;
+                    }
+
+                    return (
+                      <>
+                        <div className="flex items-center gap-4 mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-primary/30 border border-primary" />
+                            <span className="text-xs text-muted-foreground">Forecast</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge 
+                              variant={status === "below" ? "destructive" : status === "above" ? "default" : "secondary"}
+                              className="text-xs h-5"
+                              data-testid="badge-forecast-status"
+                            >
+                              {status === "below" && <ArrowDown className="w-3 h-3 mr-1" />}
+                              {status === "above" && <ArrowUp className="w-3 h-3 mr-1" />}
+                              {status === "on-track" && <Minus className="w-3 h-3 mr-1" />}
+                              {status === "below" ? "Below Forecast" : status === "above" ? "Above Forecast" : "On Track"}
+                              ({diff > 0 ? "+" : ""}{diff.toFixed(1)}%)
+                            </Badge>
+                          </div>
+                          <div className="ml-auto text-xs">
+                            <span className="text-muted-foreground">Expected: </span>
+                            <span className="font-mono font-bold">{expectedToday}%</span>
+                            <span className="text-muted-foreground mx-1">•</span>
+                            <span className="text-muted-foreground">Actual: </span>
+                            <span className="font-mono font-bold text-primary">{loadFactor}%</span>
+                          </div>
+                        </div>
+                        <div className="h-32">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="forecastGradient" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <XAxis 
+                                dataKey="day" 
+                                tick={{ fontSize: 10 }} 
+                                tickFormatter={(v) => `D${v}`}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <YAxis 
+                                tick={{ fontSize: 10 }} 
+                                tickFormatter={(v) => `${v}%`}
+                                axisLine={false}
+                                tickLine={false}
+                                domain={[0, 100]}
+                              />
+                              <Tooltip 
+                                contentStyle={{ 
+                                  backgroundColor: 'hsl(var(--card))', 
+                                  border: '1px solid hsl(var(--border))',
+                                  borderRadius: '8px',
+                                  fontSize: '12px'
+                                }}
+                                formatter={(value: number, name: string) => [
+                                  `${value.toFixed(1)}%`, 
+                                  name === 'forecast' ? 'Expected' : 'Actual'
+                                ]}
+                                labelFormatter={(day) => `Day ${day}`}
+                              />
+                              <ReferenceLine 
+                                x={daysElapsed} 
+                                stroke="hsl(var(--primary))" 
+                                strokeDasharray="3 3" 
+                                label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--primary))' }}
+                              />
+                              <Area 
+                                type="monotone" 
+                                dataKey="forecast" 
+                                stroke="hsl(var(--primary))" 
+                                fill="url(#forecastGradient)" 
+                                strokeWidth={2}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
             )}
 
             {/* Seat Map */}

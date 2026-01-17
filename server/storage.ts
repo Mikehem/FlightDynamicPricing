@@ -26,6 +26,31 @@ function formatDate(daysFromNow: number): string {
 // All flights operate on a 60-day booking window
 const BOOKING_WINDOW_DAYS = 60;
 
+// Generate a demand forecast curve (typical S-curve for airline bookings)
+// targetOccupancy is the final expected occupancy (0-100)
+function generateDemandForecast(targetOccupancy: number): { day: number; expectedOccupancy: number }[] {
+  const points = [];
+  for (let day = 0; day <= 60; day += 5) {
+    // S-curve: slow start, accelerate in middle, slow near end
+    // Using logistic function adjusted for 60-day window
+    const progress = day / 60;
+    const sCurve = 1 / (1 + Math.exp(-10 * (progress - 0.5)));
+    const occupancy = Math.round(sCurve * targetOccupancy);
+    points.push({ day, expectedOccupancy: occupancy });
+  }
+  return points;
+}
+
+// Get expected occupancy for a specific day from forecast
+function getExpectedOccupancy(forecast: { day: number; expectedOccupancy: number }[], day: number): number {
+  // Find the closest points and interpolate
+  const before = forecast.filter(p => p.day <= day).pop() || forecast[0];
+  const after = forecast.find(p => p.day > day) || forecast[forecast.length - 1];
+  if (before.day === after.day) return before.expectedOccupancy;
+  const ratio = (day - before.day) / (after.day - before.day);
+  return Math.round(before.expectedOccupancy + ratio * (after.expectedOccupancy - before.expectedOccupancy));
+}
+
 const SCENARIOS: ScenarioDef[] = [
   {
     id: "ipl-season",
@@ -38,9 +63,11 @@ const SCENARIOS: ScenarioDef[] = [
       totalSeats: 192,
       bookingWindow: 60,
       daysToDeparture: 30,
-      daysElapsed: 30, // 30 days into 60-day window
+      daysElapsed: 30,
       currentDate: formatDate(0),
       departureDate: formatDate(60),
+      demandForecast: generateDemandForecast(95), // High demand scenario
+      expectedOccupancyToday: getExpectedOccupancy(generateDemandForecast(95), 30),
       fuelCostIndex: 1.1,
       seasonalityIndex: 0.85,
       baseDemand: 0.92,
@@ -67,9 +94,11 @@ const SCENARIOS: ScenarioDef[] = [
       totalSeats: 192,
       bookingWindow: 60,
       daysToDeparture: 45,
-      daysElapsed: 15, // 15 days into 60-day window
+      daysElapsed: 15,
       currentDate: formatDate(0),
       departureDate: formatDate(60),
+      demandForecast: generateDemandForecast(75), // Medium demand
+      expectedOccupancyToday: getExpectedOccupancy(generateDemandForecast(75), 15),
       fuelCostIndex: 1.4,
       seasonalityIndex: 0.55,
       baseDemand: 0.58,
@@ -96,9 +125,11 @@ const SCENARIOS: ScenarioDef[] = [
       totalSeats: 192,
       bookingWindow: 60,
       daysToDeparture: 60,
-      daysElapsed: 0, // Window just opened
+      daysElapsed: 0,
       currentDate: formatDate(0),
       departureDate: formatDate(60),
+      demandForecast: generateDemandForecast(65), // Low demand
+      expectedOccupancyToday: 0, // Day 0, no bookings yet
       fuelCostIndex: 1.0,
       seasonalityIndex: 0.35,
       baseDemand: 0.38,
@@ -117,7 +148,7 @@ const SCENARIOS: ScenarioDef[] = [
   {
     id: "last-minute",
     name: "Last Minute Rush",
-    description: "Flight departing in 3 days with only 45% seats sold. Sudden corporate booking interest detected. Balance between capturing last-minute premium demand and filling remaining inventory. We are 57 days into the 60-day booking window.",
+    description: "Flight departing in 3 days with only 45% seats sold (below forecast of 85%). Sudden corporate booking interest detected. Balance between capturing last-minute premium demand and filling remaining inventory. We are 57 days into the 60-day booking window.",
     environment: {
       route: "BLR → DXB",
       airline: "Indigo",
@@ -125,9 +156,11 @@ const SCENARIOS: ScenarioDef[] = [
       totalSeats: 192,
       bookingWindow: 60,
       daysToDeparture: 3,
-      daysElapsed: 57, // 57 days into 60-day window
+      daysElapsed: 57,
       currentDate: formatDate(0),
       departureDate: formatDate(60),
+      demandForecast: generateDemandForecast(88), // Expected 88% but actual is 45%
+      expectedOccupancyToday: getExpectedOccupancy(generateDemandForecast(88), 57),
       fuelCostIndex: 1.05,
       seasonalityIndex: 0.72,
       baseDemand: 0.78,
@@ -180,6 +213,16 @@ export class DatabaseStorage implements IStorage {
     await db.update(sessions).set({ active: false });
 
     const scenario = SCENARIOS.find(s => s.id === scenarioId) || SCENARIOS[0];
+    const env = scenario.environment;
+    
+    // Calculate initial seats sold based on days elapsed
+    // Use expectedOccupancyToday but add some variance to make it interesting
+    const totalSeats = 192;
+    const expectedOccupancy = env.expectedOccupancyToday || 0;
+    // Add -10 to +5% variance for interesting scenarios
+    const variance = (Math.random() * 15 - 10); // -10% to +5%
+    const actualOccupancy = Math.max(0, Math.min(100, expectedOccupancy + variance));
+    const seatsSold = Math.round((actualOccupancy / 100) * totalSeats);
     
     // Create new session
     const [session] = await db.insert(sessions).values({
@@ -201,15 +244,49 @@ export class DatabaseStorage implements IStorage {
       { code: "BUS_2", class: "BUSINESS", allocated: 12, price: 32000, basePrice: 32000 },
     ];
 
+    // Distribute pre-sold seats proportionally (cheaper buckets sell first)
+    let remainingToSell = seatsSold;
+    const bucketSales = [
+      { code: "ECO_1", maxSold: 42 },
+      { code: "ECO_2", maxSold: 42 },
+      { code: "ECO_3", maxSold: 42 },
+      { code: "ECO_4", maxSold: 42 },
+      { code: "BUS_1", maxSold: 12 },
+      { code: "BUS_2", maxSold: 12 },
+    ];
+    
+    const soldPerBucket: Record<string, number> = {};
+    for (const bs of bucketSales) {
+      const toSell = Math.min(remainingToSell, bs.maxSold);
+      soldPerBucket[bs.code] = toSell;
+      remainingToSell -= toSell;
+      if (remainingToSell <= 0) break;
+    }
+
+    let totalRevenue = 0;
     for (const b of initialBuckets) {
+      const sold = soldPerBucket[b.code] || 0;
+      totalRevenue += sold * b.price;
       await db.insert(buckets).values({
         sessionId: session.id,
         ...b,
-        sold: 0
+        sold
       });
     }
 
-    await this.logReasoning(session.id, "System", "Initialization", `Loaded scenario: ${scenario.name}`);
+    // Update session with initial revenue
+    if (totalRevenue > 0) {
+      await db.update(sessions).set({ totalRevenue }).where(eq(sessions.id, session.id));
+    }
+
+    const occupancyStatus = actualOccupancy < expectedOccupancy - 5 
+      ? "BELOW forecast (need to stimulate demand)" 
+      : actualOccupancy > expectedOccupancy + 5 
+        ? "ABOVE forecast (opportunity to increase prices)"
+        : "ON TRACK with forecast";
+
+    await this.logReasoning(session.id, "System", "Initialization", 
+      `Loaded scenario: ${scenario.name}. Day ${env.daysElapsed} of 60. Current occupancy: ${Math.round(actualOccupancy)}% (${seatsSold}/${totalSeats} seats). Expected: ${expectedOccupancy}%. Status: ${occupancyStatus}`);
     return session;
   }
 

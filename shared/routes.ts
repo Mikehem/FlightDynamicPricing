@@ -14,6 +14,11 @@ export const errorSchemas = {
 };
 
 // Full scenario environment schema
+const demandForecastPointSchema = z.object({
+  day: z.number(),
+  expectedOccupancy: z.number(),
+});
+
 const scenarioEnvironmentSchema = z.object({
   route: z.string(),
   airline: z.string(),
@@ -24,6 +29,8 @@ const scenarioEnvironmentSchema = z.object({
   daysElapsed: z.number(),
   currentDate: z.string(),
   departureDate: z.string(),
+  demandForecast: z.array(demandForecastPointSchema),
+  expectedOccupancyToday: z.number(),
   fuelCostIndex: z.number(),
   seasonalityIndex: z.number(),
   baseDemand: z.number(),

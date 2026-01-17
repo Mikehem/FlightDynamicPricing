@@ -87,6 +87,12 @@ export type ReasoningLog = typeof reasoningLogs.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 
 // Scenario definition type (not in DB, just logic)
+// Demand forecast point for a specific day
+export interface DemandForecastPoint {
+  day: number; // Day in booking window (0-60)
+  expectedOccupancy: number; // Expected cumulative occupancy % at this point
+}
+
 export interface ScenarioEnvironment {
   // Flight Details
   route: string;
@@ -100,6 +106,10 @@ export interface ScenarioEnvironment {
   daysElapsed: number; // How many days into the window
   currentDate: string;
   departureDate: string;
+  
+  // Demand Forecast - expected booking curve over 60 days
+  demandForecast: DemandForecastPoint[];
+  expectedOccupancyToday: number; // What % should be sold by now
   
   // Market Conditions
   fuelCostIndex: number; // 1.0 is normal, 1.4 means 40% higher
