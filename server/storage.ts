@@ -970,12 +970,23 @@ export class DatabaseStorage implements IStorage {
     await db.insert(chatMessages).values({ sessionId, role: "user", content: message });
     
     const session = await this.getCurrentSession();
-    const currentBuckets = await this.getBuckets(sessionId);
     if (!session) {
       const errorMsg = "No active session. Please load a scenario first.";
       await db.insert(chatMessages).values({ sessionId, role: "assistant", content: errorMsg });
       return errorMsg;
     }
+    
+    // Run orchestration automatically to get dynamic pricing based on current environment
+    // This ensures prices are always up-to-date when users inquire about bookings
+    try {
+      await this.runOrchestration(sessionId);
+    } catch (e) {
+      console.error("Orchestration error during chat:", e);
+      // Continue with existing prices if orchestration fails
+    }
+    
+    // Get updated buckets after orchestration
+    const currentBuckets = await this.getBuckets(sessionId);
     
     // Get conversation history for context
     const history = await this.getChatHistory(sessionId);
