@@ -13,17 +13,40 @@ export const errorSchemas = {
   }),
 };
 
+// Full scenario environment schema
+const scenarioEnvironmentSchema = z.object({
+  route: z.string(),
+  airline: z.string(),
+  aircraft: z.string(),
+  totalSeats: z.number(),
+  daysToDeparture: z.number(),
+  currentDate: z.string(),
+  departureDate: z.string(),
+  fuelCostIndex: z.number(),
+  seasonalityIndex: z.number(),
+  baseDemand: z.number(),
+  competitorAggressiveness: z.number(),
+  competitors: z.array(z.object({ name: z.string(), basePrice: z.number() })),
+  eventImpact: z.string().nullable(),
+  weatherForecast: z.string(),
+  revenueTarget: z.number(),
+  occupancyTarget: z.number(),
+});
+
+const scenarioSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  environment: scenarioEnvironmentSchema,
+});
+
 export const api = {
   scenarios: {
     list: {
       method: 'GET' as const,
       path: '/api/scenarios',
       responses: {
-        200: z.array(z.object({
-          id: z.string(),
-          name: z.string(),
-          description: z.string()
-        })),
+        200: z.array(scenarioSchema),
       },
     },
     load: {

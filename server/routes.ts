@@ -12,7 +12,8 @@ export async function registerRoutes(
   // === SCENARIOS ===
   app.get(api.scenarios.list.path, async (_req, res) => {
     const scenarios = storage.getScenarios();
-    res.json(scenarios.map(s => ({ id: s.id, name: s.name, description: s.description })));
+    // Return full scenario data including environment
+    res.json(scenarios);
   });
 
   app.post(api.scenarios.load.path, async (req, res) => {

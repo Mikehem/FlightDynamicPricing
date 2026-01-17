@@ -87,17 +87,41 @@ export type ReasoningLog = typeof reasoningLogs.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 
 // Scenario definition type (not in DB, just logic)
+export interface ScenarioEnvironment {
+  // Flight Details
+  route: string;
+  airline: string;
+  aircraft: string;
+  totalSeats: number;
+  
+  // Time Context
+  daysToDeparture: number;
+  currentDate: string;
+  departureDate: string;
+  
+  // Market Conditions
+  fuelCostIndex: number; // 1.0 is normal, 1.4 means 40% higher
+  seasonalityIndex: number; // 0-1
+  baseDemand: number; // 0-1 forecast
+  
+  // Competition
+  competitorAggressiveness: number; // 0-1
+  competitors: { name: string; basePrice: number; }[];
+  
+  // Events & Weather
+  eventImpact: string | null;
+  weatherForecast: string;
+  
+  // Revenue Goals
+  revenueTarget: number;
+  occupancyTarget: number; // percentage
+}
+
 export interface ScenarioDef {
   id: string;
   name: string;
   description: string;
-  baseParams: {
-    daysToDeparture: number;
-    fuelCostIndex: number; // 1.0 is normal
-    competitorAggressiveness: number; // 0-1
-    baseDemand: number; // 0-1
-    eventImpact: string | null; // e.g., 'IPL Match'
-  };
+  environment: ScenarioEnvironment;
 }
 
 export interface SimulationState {

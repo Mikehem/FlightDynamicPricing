@@ -16,25 +16,121 @@ const ai = new GoogleGenAI({
 });
 const model = "gemini-2.5-flash"; // Fast model for agents
 
+// Helper to compute dates
+function formatDate(daysFromNow: number): string {
+  const date = new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000);
+  return date.toISOString().split('T')[0];
+}
+
 // === SCENARIO DEFINITIONS ===
 const SCENARIOS: ScenarioDef[] = [
   {
     id: "ipl-season",
     name: "IPL Season Final (High Demand)",
-    description: "Bangalore to Dubai during IPL Final. High demand expected.",
-    baseParams: { daysToDeparture: 30, fuelCostIndex: 1.1, competitorAggressiveness: 0.8, baseDemand: 0.9, eventImpact: "IPL Final Match" }
+    description: "Bangalore to Dubai during IPL Final week. Cricket fans are traveling in droves to watch the match. Expect extremely high demand across all fare classes, especially premium economy and business. Competitors are already raising prices.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      daysToDeparture: 30,
+      currentDate: formatDate(0),
+      departureDate: formatDate(30),
+      fuelCostIndex: 1.1,
+      seasonalityIndex: 0.85,
+      baseDemand: 0.92,
+      competitorAggressiveness: 0.8,
+      competitors: [
+        { name: "Akasa Air", basePrice: 13500 },
+        { name: "Air India", basePrice: 15200 },
+        { name: "Emirates", basePrice: 18500 }
+      ],
+      eventImpact: "IPL Final Match - High Demand",
+      weatherForecast: "Clear skies, 34°C in Dubai",
+      revenueTarget: 2850000,
+      occupancyTarget: 95
+    }
   },
   {
     id: "fuel-spike",
     name: "Global Fuel Crisis",
-    description: "Sudden spike in ATF prices. Costs up 40%.",
-    baseParams: { daysToDeparture: 45, fuelCostIndex: 1.4, competitorAggressiveness: 0.5, baseDemand: 0.6, eventImpact: "Fuel Price Surge" }
+    description: "Sudden spike in Aviation Turbine Fuel (ATF) prices due to geopolitical tensions. Operating costs are up 40%. Competitors are hesitant to raise prices fearing demand destruction. Strategic pricing required to maintain margins without losing market share.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      daysToDeparture: 45,
+      currentDate: formatDate(0),
+      departureDate: formatDate(45),
+      fuelCostIndex: 1.4,
+      seasonalityIndex: 0.55,
+      baseDemand: 0.58,
+      competitorAggressiveness: 0.4,
+      competitors: [
+        { name: "Akasa Air", basePrice: 11800 },
+        { name: "Air India", basePrice: 13000 },
+        { name: "Emirates", basePrice: 16200 }
+      ],
+      eventImpact: "Fuel Price Surge (+40%)",
+      weatherForecast: "Partly cloudy, 28°C",
+      revenueTarget: 2200000,
+      occupancyTarget: 75
+    }
   },
   {
     id: "lean-season",
     name: "Mid-Week Lean Season",
-    description: "Standard Tuesday flight in off-peak season.",
-    baseParams: { daysToDeparture: 60, fuelCostIndex: 1.0, competitorAggressiveness: 0.9, baseDemand: 0.4, eventImpact: null }
+    description: "Standard Tuesday departure in off-peak season. Low natural demand. Competitors are aggressively discounting to fill seats. Focus on maximizing load factor while protecting yield where possible.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      daysToDeparture: 60,
+      currentDate: formatDate(0),
+      departureDate: formatDate(60),
+      fuelCostIndex: 1.0,
+      seasonalityIndex: 0.35,
+      baseDemand: 0.38,
+      competitorAggressiveness: 0.92,
+      competitors: [
+        { name: "Akasa Air", basePrice: 9500 },
+        { name: "Air India", basePrice: 10200 },
+        { name: "Emirates", basePrice: 14000 }
+      ],
+      eventImpact: null,
+      weatherForecast: "Sunny, 32°C",
+      revenueTarget: 1500000,
+      occupancyTarget: 65
+    }
+  },
+  {
+    id: "last-minute",
+    name: "Last Minute Rush",
+    description: "Flight departing in 3 days with only 45% seats sold. Sudden corporate booking interest detected. Balance between capturing last-minute premium demand and filling remaining inventory.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      daysToDeparture: 3,
+      currentDate: formatDate(0),
+      departureDate: formatDate(3),
+      fuelCostIndex: 1.05,
+      seasonalityIndex: 0.72,
+      baseDemand: 0.78,
+      competitorAggressiveness: 0.65,
+      competitors: [
+        { name: "Akasa Air", basePrice: 18500 },
+        { name: "Air India", basePrice: 21000 },
+        { name: "Emirates", basePrice: 28000 }
+      ],
+      eventImpact: "Corporate Conference in Dubai",
+      weatherForecast: "Clear, 30°C",
+      revenueTarget: 2400000,
+      occupancyTarget: 88
+    }
   }
 ];
 
@@ -78,7 +174,7 @@ export class DatabaseStorage implements IStorage {
     const [session] = await db.insert(sessions).values({
       scenarioId,
       currentDate: new Date(),
-      departureDate: new Date(Date.now() + scenario.baseParams.daysToDeparture * 24 * 60 * 60 * 1000),
+      departureDate: new Date(Date.now() + scenario.environment.daysToDeparture * 24 * 60 * 60 * 1000),
       active: true
     }).returning();
 
