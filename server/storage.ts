@@ -185,6 +185,224 @@ const SCENARIOS: ScenarioDef[] = [
       revenueTarget: 2400000,
       occupancyTarget: 88
     }
+  },
+  // NEW SCENARIOS
+  {
+    id: "ipl-cancelled",
+    name: "IPL Final Cancelled (Demand Collapse)",
+    description: "The IPL Final has been cancelled due to unforeseen circumstances. Thousands of cricket fans are now cancelling their travel plans. Demand has crashed overnight. Most competitors are slashing prices. We are 25 days into the booking window with 55% seats already sold at premium prices.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      bookingWindow: 60,
+      daysToDeparture: 35,
+      daysElapsed: 25,
+      currentDate: formatDate(0),
+      departureDate: formatDate(35),
+      demandForecast: generateDemandForecast(40), // Collapsed demand
+      expectedOccupancyToday: 55, // Was high before cancellation
+      fuelCostIndex: 1.05,
+      seasonalityIndex: 0.25, // Season impact gone
+      baseDemand: 0.28, // Demand collapsed
+      competitorAggressiveness: 0.95, // Everyone slashing prices
+      competitors: [
+        { name: "Akasa Air", basePrice: 8500 },
+        { name: "Air India", basePrice: 9200 },
+        { name: "Emirates", basePrice: 12000 }
+      ],
+      eventImpact: "IPL CANCELLED - Mass Cancellations Expected",
+      weatherForecast: "Clear, 32°C",
+      revenueTarget: 1200000,
+      occupancyTarget: 55
+    }
+  },
+  {
+    id: "low-demand-5days",
+    name: "Low Demand - 5 Days Out",
+    description: "Flight departing in 5 days with only 35% seats sold. No special events, weak organic demand. Need aggressive seat allocation optimization to maximize revenue from remaining inventory. Economy buckets need attention.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      bookingWindow: 60,
+      daysToDeparture: 5,
+      daysElapsed: 55,
+      currentDate: formatDate(0),
+      departureDate: formatDate(5),
+      demandForecast: generateDemandForecast(60),
+      expectedOccupancyToday: 75, // Should be 75% but only 35%
+      fuelCostIndex: 1.0,
+      seasonalityIndex: 0.4,
+      baseDemand: 0.35,
+      competitorAggressiveness: 0.75,
+      competitors: [
+        { name: "Akasa Air", basePrice: 11000 },
+        { name: "Air India", basePrice: 12500 },
+        { name: "Emirates", basePrice: 16000 }
+      ],
+      eventImpact: null,
+      weatherForecast: "Partly cloudy, 30°C",
+      revenueTarget: 1600000,
+      occupancyTarget: 70
+    }
+  },
+  {
+    id: "severe-weather",
+    name: "Severe Weather Warning",
+    description: "Severe sandstorm warning issued for Dubai. Weather forecasts predict possible flight delays or diversions. Some passengers are nervous and may not book. Competitors are maintaining prices but seeing lower conversions. 40 days to departure.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      bookingWindow: 60,
+      daysToDeparture: 40,
+      daysElapsed: 20,
+      currentDate: formatDate(0),
+      departureDate: formatDate(40),
+      demandForecast: generateDemandForecast(55), // Reduced due to weather concerns
+      expectedOccupancyToday: 20,
+      fuelCostIndex: 1.0,
+      seasonalityIndex: 0.5,
+      baseDemand: 0.42,
+      competitorAggressiveness: 0.5,
+      competitors: [
+        { name: "Akasa Air", basePrice: 11500 },
+        { name: "Air India", basePrice: 13000 },
+        { name: "Emirates", basePrice: 16500 }
+      ],
+      eventImpact: "WEATHER ALERT: Severe Sandstorm Warning for Dubai",
+      weatherForecast: "⚠️ Sandstorm warning, visibility may be low",
+      revenueTarget: 1400000,
+      occupancyTarget: 55
+    }
+  },
+  {
+    id: "competitor-price-war",
+    name: "Competitor Price War",
+    description: "Akasa Air just launched a flash sale with 40% off on BLR-DXB route. Air India is matching the discount. Emirates holding firm on premium pricing. We need to decide: match discounts, hold prices, or find a middle ground. 45 days to departure.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      bookingWindow: 60,
+      daysToDeparture: 45,
+      daysElapsed: 15,
+      currentDate: formatDate(0),
+      departureDate: formatDate(45),
+      demandForecast: generateDemandForecast(72),
+      expectedOccupancyToday: 12,
+      fuelCostIndex: 1.0,
+      seasonalityIndex: 0.6,
+      baseDemand: 0.65,
+      competitorAggressiveness: 0.98, // Extremely aggressive
+      competitors: [
+        { name: "Akasa Air", basePrice: 7200 }, // 40% off
+        { name: "Air India", basePrice: 7800 }, // Matching
+        { name: "Emirates", basePrice: 17500 } // Holding firm
+      ],
+      eventImpact: "COMPETITOR ALERT: Akasa Flash Sale -40%",
+      weatherForecast: "Clear, 28°C",
+      revenueTarget: 1800000,
+      occupancyTarget: 72
+    }
+  },
+  {
+    id: "expo-dubai",
+    name: "Dubai Expo Event",
+    description: "Major technology expo happening in Dubai. Business travelers are booking premium seats. Economy demand is moderate but Business class is seeing unprecedented interest. 20 days to departure.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      bookingWindow: 60,
+      daysToDeparture: 20,
+      daysElapsed: 40,
+      currentDate: formatDate(0),
+      departureDate: formatDate(20),
+      demandForecast: generateDemandForecast(88),
+      expectedOccupancyToday: 65,
+      fuelCostIndex: 1.08,
+      seasonalityIndex: 0.78,
+      baseDemand: 0.82,
+      competitorAggressiveness: 0.55, // Less aggressive, demand is high
+      competitors: [
+        { name: "Akasa Air", basePrice: 14500 },
+        { name: "Air India", basePrice: 16800 },
+        { name: "Emirates", basePrice: 22000 }
+      ],
+      eventImpact: "Dubai Tech Expo - High Business Travel Demand",
+      weatherForecast: "Sunny, 35°C",
+      revenueTarget: 2600000,
+      occupancyTarget: 90
+    }
+  },
+  {
+    id: "ramadan-travel",
+    name: "Ramadan Travel Season",
+    description: "Ramadan period with mixed travel patterns. Some travelers heading to Dubai for religious observance while leisure travel is subdued. Unique demand curve with specific peaks. 50 days to departure.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      bookingWindow: 60,
+      daysToDeparture: 50,
+      daysElapsed: 10,
+      currentDate: formatDate(0),
+      departureDate: formatDate(50),
+      demandForecast: generateDemandForecast(70),
+      expectedOccupancyToday: 8,
+      fuelCostIndex: 1.02,
+      seasonalityIndex: 0.65,
+      baseDemand: 0.58,
+      competitorAggressiveness: 0.6,
+      competitors: [
+        { name: "Akasa Air", basePrice: 10800 },
+        { name: "Air India", basePrice: 12200 },
+        { name: "Emirates", basePrice: 15500 }
+      ],
+      eventImpact: "Ramadan Season - Religious Travel Peak",
+      weatherForecast: "Hot, 38°C",
+      revenueTarget: 1900000,
+      occupancyTarget: 70
+    }
+  },
+  {
+    id: "oil-price-drop",
+    name: "Oil Price Crash",
+    description: "Global oil prices have crashed 30% due to OPEC decisions. Fuel costs are down significantly. Competitors are slow to pass savings to customers. Opportunity to gain market share with competitive pricing or boost margins. 35 days to departure.",
+    environment: {
+      route: "BLR → DXB",
+      airline: "Indigo",
+      aircraft: "Airbus A321 Neo",
+      totalSeats: 192,
+      bookingWindow: 60,
+      daysToDeparture: 35,
+      daysElapsed: 25,
+      currentDate: formatDate(0),
+      departureDate: formatDate(35),
+      demandForecast: generateDemandForecast(75),
+      expectedOccupancyToday: 35,
+      fuelCostIndex: 0.7, // Fuel 30% cheaper
+      seasonalityIndex: 0.55,
+      baseDemand: 0.62,
+      competitorAggressiveness: 0.5, // Competitors slow to react
+      competitors: [
+        { name: "Akasa Air", basePrice: 12000 }, // Not yet discounted
+        { name: "Air India", basePrice: 13500 },
+        { name: "Emirates", basePrice: 17000 }
+      ],
+      eventImpact: "Oil Price Crash -30%: Cost Advantage",
+      weatherForecast: "Clear, 30°C",
+      revenueTarget: 2000000,
+      occupancyTarget: 78
+    }
   }
 ];
 
@@ -448,7 +666,8 @@ export class DatabaseStorage implements IStorage {
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         console.error("Pricing Agent: No JSON found in response");
-        return;
+        await this.logReasoning(sessionId, "Pricing Agent", "Parse Error", "Could not extract JSON from AI response. Using default pricing.");
+        throw new Error("No JSON found");
       }
       
       let result;
@@ -456,7 +675,8 @@ export class DatabaseStorage implements IStorage {
         result = JSON.parse(jsonMatch[0]);
       } catch (parseError) {
         console.error("Pricing Agent: Failed to parse JSON", parseError);
-        return;
+        await this.logReasoning(sessionId, "Pricing Agent", "Parse Error", "Failed to parse AI response. Using default pricing.");
+        throw parseError;
       }
       
       // Default multiplier structure with fallbacks
@@ -559,6 +779,106 @@ export class DatabaseStorage implements IStorage {
       }
     } catch (e) {
       console.error("Pricing Error", e);
+    }
+
+    // 3. SEAT ALLOCATION AGENT - Analyzes bucket distribution and recommends reallocation
+    const seatAllocationPrompt = `
+      You are a Seat Allocation Optimization Agent for airline revenue management.
+      
+      CONTEXT:
+      - Scenario: ${scenario.name}
+      - Days to departure: ${daysLeft}
+      - Current occupancy: ${currentOccupancy}% (${soldSeats}/${totalSeats} seats)
+      - Demand score: ${forecast.demandScore}
+      
+      CURRENT BUCKET STATUS:
+      ${currentBuckets.map(b => `${b.code} (${b.class}): ${b.sold || 0}/${b.allocated} sold, ₹${b.price}`).join('\n')}
+      
+      TASK: Analyze the seat allocation across fare buckets and recommend optimization.
+      Consider:
+      1. Are lower fare buckets selling out too fast (leaving money on table)?
+      2. Are higher fare buckets empty (pricing too high)?
+      3. Should seats be reallocated between buckets?
+      4. Business vs Economy class balance
+      
+      Return JSON:
+      {
+        "analysis": "Brief analysis of current allocation",
+        "recommendation": "REALLOCATE_UP" | "REALLOCATE_DOWN" | "HOLD" | "CLOSE_BUCKET",
+        "details": "Specific recommendation with bucket names",
+        "urgency": "HIGH" | "MEDIUM" | "LOW"
+      }
+    `;
+
+    try {
+      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: seatAllocationPrompt }] }] });
+      let text = "";
+      for await (const chunk of stream) {
+        text += chunk.text || "";
+      }
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const allocation = JSON.parse(jsonMatch[0]);
+        const urgencyLabel = allocation.urgency === "HIGH" ? "[HIGH]" : allocation.urgency === "MEDIUM" ? "[MEDIUM]" : "[LOW]";
+        await this.logReasoning(sessionId, "Seat Allocation Agent", 
+          `${urgencyLabel} ${allocation.recommendation}`,
+          `${allocation.analysis}\n\n${allocation.details}`
+        );
+      }
+    } catch (e) {
+      console.error("Seat Allocation Error", e);
+    }
+
+    // 4. COMPETITOR ANALYSIS AGENT - Monitors competitor pricing and recommends response
+    const competitorPrompt = `
+      You are a Competitor Analysis Agent for airline pricing intelligence.
+      
+      CONTEXT:
+      - Our Route: ${env.route}
+      - Our Current Average Price: ₹${Math.round(currentBuckets.reduce((sum, b) => sum + b.price, 0) / currentBuckets.length)}
+      - Days to departure: ${daysLeft}
+      
+      COMPETITOR PRICING:
+      ${env.competitors.map(c => `${c.name}: ₹${c.basePrice}`).join('\n')}
+      
+      MARKET CONDITIONS:
+      - Competitor Aggressiveness: ${(env.competitorAggressiveness * 100).toFixed(0)}%
+      - Event Impact: ${env.eventImpact || "None"}
+      
+      TASK: Analyze competitor positioning and recommend our response strategy.
+      Consider:
+      1. Are we priced above or below market?
+      2. Which competitor is the biggest threat?
+      3. Should we match, undercut, or maintain premium?
+      4. Any market share opportunity?
+      
+      Return JSON:
+      {
+        "marketPosition": "PREMIUM" | "COMPETITIVE" | "BUDGET" | "UNDERCUT",
+        "biggestThreat": "Competitor name",
+        "threatLevel": "HIGH" | "MEDIUM" | "LOW",
+        "recommendation": "Specific pricing recommendation",
+        "reasoning": "Why this strategy"
+      }
+    `;
+
+    try {
+      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: competitorPrompt }] }] });
+      let text = "";
+      for await (const chunk of stream) {
+        text += chunk.text || "";
+      }
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const competitor = JSON.parse(jsonMatch[0]);
+        const threatLabel = competitor.threatLevel === "HIGH" ? "[HIGH THREAT]" : competitor.threatLevel === "MEDIUM" ? "[MEDIUM]" : "[LOW]";
+        await this.logReasoning(sessionId, "Competitor Agent", 
+          `${threatLabel} Position: ${competitor.marketPosition} | Threat: ${competitor.biggestThreat}`,
+          `${competitor.reasoning}\n\nRecommendation: ${competitor.recommendation}`
+        );
+      }
+    } catch (e) {
+      console.error("Competitor Analysis Error", e);
     }
   }
 
