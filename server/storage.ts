@@ -350,7 +350,7 @@ export class DatabaseStorage implements IStorage {
     const forecastPrompt = `
       You are an Airline Demand Forecast Agent.
       Scenario: ${scenario.name} (${scenario.description}).
-      Event: ${scenario.baseParams.eventImpact || "None"}.
+      Event: ${scenario.environment.eventImpact || "None"}.
       Current Sales: ${JSON.stringify(currentBuckets.map(b => ({ code: b.code, sold: b.sold, price: b.price })))}
       
       Analyze demand. Return JSON: { "demandScore": number (0-1), "reasoning": "string" }
