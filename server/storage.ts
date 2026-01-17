@@ -646,7 +646,37 @@ export class DatabaseStorage implements IStorage {
                 // Complete the booking
                 const referenceCode = generateBookingReference();
                 const pricePerSeat = bucket.price || 0;
+                const basePrice = bucket.basePrice || pricePerSeat;
                 const totalFare = pricePerSeat * passengers;
+                const priceChange = ((pricePerSeat - basePrice) / basePrice) * 100;
+                
+                // Get most recent pricing reasoning for this bucket
+                const recentLogs = await db.select()
+                  .from(reasoningLogs)
+                  .where(eq(reasoningLogs.sessionId, sessionId))
+                  .orderBy(desc(reasoningLogs.timestamp))
+                  .limit(10);
+                
+                const pricingLog = recentLogs.find(log => 
+                  log.agentName === "Pricing Agent" && 
+                  log.decision?.includes(bucket.code)
+                );
+                
+                // Extract pricing factors from metadata if available
+                let pricingReasoning = "Dynamic pricing applied based on current market conditions.";
+                if (pricingLog?.metadata) {
+                  const meta = pricingLog.metadata as Record<string, unknown>;
+                  if (meta.multipliers) {
+                    const multipliers = meta.multipliers as Record<string, number>;
+                    const factors = Object.entries(multipliers)
+                      .filter(([_, v]) => v !== 1.0)
+                      .map(([k, v]) => `${k}: ${v > 1 ? '+' : ''}${((v - 1) * 100).toFixed(0)}%`)
+                      .join(', ');
+                    if (factors) {
+                      pricingReasoning = `Price adjusted for: ${factors}`;
+                    }
+                  }
+                }
                 
                 // Insert booking record
                 await db.insert(bookings).values({
@@ -670,31 +700,68 @@ export class DatabaseStorage implements IStorage {
                   .set({ totalRevenue: (session.totalRevenue || 0) + totalFare })
                   .where(eq(sessions.id, sessionId));
                 
-                // Log to agent reasoning
+                // Log to agent reasoning with detailed breakdown
+                const logReasoning = `
+Booking completed successfully.
+
+**Passenger Details:**
+- Passengers: ${passengers}
+- Class: ${bucket.class} (${bucket.code})
+
+**Fare Breakdown:**
+- Base fare: ₹${basePrice.toLocaleString()} per seat
+- Dynamic price: ₹${pricePerSeat.toLocaleString()} per seat (${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(1)}%)
+- Subtotal: ₹${pricePerSeat.toLocaleString()} × ${passengers} = ₹${totalFare.toLocaleString()}
+
+**Pricing Reasoning:**
+${pricingReasoning}
+
+**Reference:** ${referenceCode}
+                `.trim();
+                
                 await this.logReasoning(sessionId, "Booking Agent", 
                   `Booking Confirmed: ${referenceCode}`,
-                  `Completed booking for ${passengers} passenger(s) in ${bucket.class} class (${bucket.code}). Total fare: ₹${totalFare.toLocaleString()}. Reference: ${referenceCode}`
+                  logReasoning
                 );
                 
-                // Generate confirmation message
+                // Generate formatted confirmation message
+                const priceIndicator = priceChange > 0 
+                  ? `(+${priceChange.toFixed(0)}% from base)` 
+                  : priceChange < 0 
+                    ? `(${priceChange.toFixed(0)}% from base)` 
+                    : '(base rate)';
+                
                 responseText = `
-🎉 **Booking Confirmed!**
+**Booking Confirmed**
 
-**Booking Reference:** ${referenceCode}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-**Flight Details:**
-- Route: BLR → DXB (Bangalore to Dubai)
-- Airline: Indigo
-- Departure: ${session.departureDate ? new Date(session.departureDate).toLocaleDateString() : 'TBD'}
+**Reference:** ${referenceCode}
 
-**Fare Details:**
-- Class: ${bucket.class}
-- Fare Type: ${bucket.code}
-- Passengers: ${passengers}
-- Price per seat: ₹${pricePerSeat.toLocaleString()}
-- **Total Fare: ₹${totalFare.toLocaleString()}**
+**Flight**
+BLR → DXB • Indigo
+${session.departureDate ? new Date(session.departureDate).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : 'Date TBD'}
 
-Your booking has been confirmed. Have a great flight! ✈️
+**Passengers:** ${passengers}
+**Class:** ${bucket.class}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Fare Summary**
+
+Base fare: ₹${basePrice.toLocaleString()}
+Dynamic rate: ₹${pricePerSeat.toLocaleString()} ${priceIndicator}
+${passengers > 1 ? `× ${passengers} passengers\n` : ''}
+**Total: ₹${totalFare.toLocaleString()}**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Why this price?**
+${pricingReasoning}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Your booking is confirmed. Have a great flight!
                 `.trim();
               } else {
                 responseText = `Sorry, only ${available} seat(s) available in ${bucket.code}. Please choose fewer passengers or a different fare class.`;
