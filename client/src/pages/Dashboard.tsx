@@ -249,20 +249,32 @@ export default function Dashboard() {
             {/* Live Stats Bar */}
             {state && (
               <div className="grid grid-cols-4 gap-3">
-                <Card className="p-3">
-                  <div className="text-xs text-muted-foreground">Revenue</div>
+                <Card className={`p-3 transition-all duration-300 ${isOrchestrating ? 'ring-2 ring-primary/50 animate-pulse' : ''}`} data-testid="stat-revenue">
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <DollarSign className="w-3 h-3" />
+                    Revenue
+                  </div>
                   <div className="text-lg font-bold text-primary">₹{totalRevenue.toLocaleString()}</div>
                 </Card>
-                <Card className="p-3">
-                  <div className="text-xs text-muted-foreground">Load Factor</div>
+                <Card className={`p-3 transition-all duration-300 ${isOrchestrating ? 'ring-2 ring-primary/50 animate-pulse' : ''}`} data-testid="stat-load-factor">
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Percent className="w-3 h-3" />
+                    Load Factor
+                  </div>
                   <div className="text-lg font-bold">{loadFactor}%</div>
                 </Card>
-                <Card className="p-3">
-                  <div className="text-xs text-muted-foreground">Seats Sold</div>
+                <Card className={`p-3 transition-all duration-300 ${isOrchestrating ? 'ring-2 ring-primary/50 animate-pulse' : ''}`} data-testid="stat-seats-sold">
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Users className="w-3 h-3" />
+                    Seats Sold
+                  </div>
                   <div className="text-lg font-bold">{totalSold} / {totalSeats}</div>
                 </Card>
-                <Card className="p-3">
-                  <div className="text-xs text-muted-foreground">Days Left</div>
+                <Card className={`p-3 transition-all duration-300 ${isOrchestrating ? 'ring-2 ring-primary/50 animate-pulse' : ''}`} data-testid="stat-days-left">
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Days Left
+                  </div>
                   <div className="text-lg font-bold">{daysUntilDeparture}</div>
                 </Card>
               </div>

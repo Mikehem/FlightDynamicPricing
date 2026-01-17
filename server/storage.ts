@@ -610,7 +610,9 @@ export class DatabaseStorage implements IStorage {
       const multiplier = (pricingResult.output as { multiplier?: number })?.multiplier || 1.0;
       const clampedMultiplier = Math.max(0.80, Math.min(1.20, multiplier));
       
-      // Apply multiplier to all buckets
+      // Apply multiplier to all buckets and calculate new revenue
+      let newTotalRevenue = 0;
+      
       for (const bucket of currentBuckets) {
         let bucketMultiplier = clampedMultiplier;
         if (bucket.class === "BUSINESS") {
@@ -620,7 +622,22 @@ export class DatabaseStorage implements IStorage {
         await db.update(buckets)
           .set({ price: newPrice })
           .where(eq(buckets.id, bucket.id));
+        
+        // Calculate revenue from sold seats at new price
+        newTotalRevenue += newPrice * (bucket.sold || 0);
       }
+      
+      // Update session with recalculated revenue and load factor
+      const totalSeats = currentBuckets.reduce((sum, b) => sum + b.allocated, 0);
+      const soldSeats = currentBuckets.reduce((sum, b) => sum + (b.sold || 0), 0);
+      const loadFactor = totalSeats > 0 ? Math.round((soldSeats / totalSeats) * 100) : 0;
+      
+      await db.update(sessions)
+        .set({ 
+          totalRevenue: newTotalRevenue,
+          loadFactor: loadFactor
+        })
+        .where(eq(sessions.id, sessionId));
     }
 
     return result;
