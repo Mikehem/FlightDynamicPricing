@@ -94,8 +94,10 @@ export interface ScenarioEnvironment {
   aircraft: string;
   totalSeats: number;
   
-  // Time Context
+  // Time Context (60-day booking window)
+  bookingWindow: number; // Always 60 days
   daysToDeparture: number;
+  daysElapsed: number; // How many days into the window
   currentDate: string;
   departureDate: string;
   

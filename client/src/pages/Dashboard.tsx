@@ -183,7 +183,9 @@ export default function Dashboard() {
 
                       {/* Time Context */}
                       <div className="space-y-1">
-                        <h5 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Time Context</h5>
+                        <h5 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Time Context (60-Day Window)</h5>
+                        <EnvRow label="Booking Window" value={`${selectedScenario.environment.bookingWindow} days`} />
+                        <EnvRow label="Days Elapsed" value={selectedScenario.environment.daysElapsed} />
                         <EnvRow label="Days to Departure" value={selectedScenario.environment.daysToDeparture} icon={<Clock className="w-3 h-3" />} highlight />
                         <EnvRow label="Current Date" value={selectedScenario.environment.currentDate} icon={<Calendar className="w-3 h-3" />} />
                         <EnvRow label="Departure Date" value={selectedScenario.environment.departureDate} />

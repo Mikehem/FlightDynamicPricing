@@ -23,19 +23,24 @@ function formatDate(daysFromNow: number): string {
 }
 
 // === SCENARIO DEFINITIONS ===
+// All flights operate on a 60-day booking window
+const BOOKING_WINDOW_DAYS = 60;
+
 const SCENARIOS: ScenarioDef[] = [
   {
     id: "ipl-season",
     name: "IPL Season Final (High Demand)",
-    description: "Bangalore to Dubai during IPL Final week. Cricket fans are traveling in droves to watch the match. Expect extremely high demand across all fare classes, especially premium economy and business. Competitors are already raising prices.",
+    description: "Bangalore to Dubai during IPL Final week. Cricket fans are traveling in droves to watch the match. Expect extremely high demand across all fare classes, especially premium economy and business. Competitors are already raising prices. We are 30 days into the 60-day booking window.",
     environment: {
       route: "BLR → DXB",
       airline: "Indigo",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
+      bookingWindow: 60,
       daysToDeparture: 30,
+      daysElapsed: 30, // 30 days into 60-day window
       currentDate: formatDate(0),
-      departureDate: formatDate(30),
+      departureDate: formatDate(60),
       fuelCostIndex: 1.1,
       seasonalityIndex: 0.85,
       baseDemand: 0.92,
@@ -54,15 +59,17 @@ const SCENARIOS: ScenarioDef[] = [
   {
     id: "fuel-spike",
     name: "Global Fuel Crisis",
-    description: "Sudden spike in Aviation Turbine Fuel (ATF) prices due to geopolitical tensions. Operating costs are up 40%. Competitors are hesitant to raise prices fearing demand destruction. Strategic pricing required to maintain margins without losing market share.",
+    description: "Sudden spike in Aviation Turbine Fuel (ATF) prices due to geopolitical tensions. Operating costs are up 40%. Competitors are hesitant to raise prices fearing demand destruction. Strategic pricing required to maintain margins. We are 15 days into the 60-day booking window.",
     environment: {
       route: "BLR → DXB",
       airline: "Indigo",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
+      bookingWindow: 60,
       daysToDeparture: 45,
+      daysElapsed: 15, // 15 days into 60-day window
       currentDate: formatDate(0),
-      departureDate: formatDate(45),
+      departureDate: formatDate(60),
       fuelCostIndex: 1.4,
       seasonalityIndex: 0.55,
       baseDemand: 0.58,
@@ -81,13 +88,15 @@ const SCENARIOS: ScenarioDef[] = [
   {
     id: "lean-season",
     name: "Mid-Week Lean Season",
-    description: "Standard Tuesday departure in off-peak season. Low natural demand. Competitors are aggressively discounting to fill seats. Focus on maximizing load factor while protecting yield where possible.",
+    description: "Standard Tuesday departure in off-peak season. Low natural demand. Competitors are aggressively discounting to fill seats. Focus on maximizing load factor while protecting yield. Booking window just opened - 60 days to departure.",
     environment: {
       route: "BLR → DXB",
       airline: "Indigo",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
+      bookingWindow: 60,
       daysToDeparture: 60,
+      daysElapsed: 0, // Window just opened
       currentDate: formatDate(0),
       departureDate: formatDate(60),
       fuelCostIndex: 1.0,
@@ -108,15 +117,17 @@ const SCENARIOS: ScenarioDef[] = [
   {
     id: "last-minute",
     name: "Last Minute Rush",
-    description: "Flight departing in 3 days with only 45% seats sold. Sudden corporate booking interest detected. Balance between capturing last-minute premium demand and filling remaining inventory.",
+    description: "Flight departing in 3 days with only 45% seats sold. Sudden corporate booking interest detected. Balance between capturing last-minute premium demand and filling remaining inventory. We are 57 days into the 60-day booking window.",
     environment: {
       route: "BLR → DXB",
       airline: "Indigo",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
+      bookingWindow: 60,
       daysToDeparture: 3,
+      daysElapsed: 57, // 57 days into 60-day window
       currentDate: formatDate(0),
-      departureDate: formatDate(3),
+      departureDate: formatDate(60),
       fuelCostIndex: 1.05,
       seasonalityIndex: 0.72,
       baseDemand: 0.78,
