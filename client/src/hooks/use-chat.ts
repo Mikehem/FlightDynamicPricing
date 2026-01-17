@@ -16,13 +16,24 @@ export function useSendMessage() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (message: string) => {
-      const res = await fetch(api.chat.send.path, {
-        method: api.chat.send.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      if (!res.ok) throw new Error("Failed to send message");
-      return api.chat.send.responses[200].parse(await res.json());
+      // Use AbortController with 2-minute timeout for group booking orchestration
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      
+      try {
+        const res = await fetch(api.chat.send.path, {
+          method: api.chat.send.method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) throw new Error("Failed to send message");
+        return api.chat.send.responses[200].parse(await res.json());
+      } catch (e) {
+        clearTimeout(timeoutId);
+        throw e;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.chat.history.path] });

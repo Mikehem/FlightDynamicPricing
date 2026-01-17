@@ -6,7 +6,7 @@ import {
 } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
-import { OrchestratorAgent } from "./orchestrator";
+import { OrchestratorAgent, type BookingContext } from "./orchestrator";
 
 // Generate booking reference code
 function generateBookingReference(): string {
@@ -580,7 +580,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // === AI AGENT ORCHESTRATION (A2A Pattern) ===
-  async runOrchestration(sessionId: number): Promise<OrchestrationResult | null> {
+  async runOrchestration(sessionId: number, bookingContext?: BookingContext): Promise<OrchestrationResult | null> {
     const session = await this.getCurrentSession();
     if (!session || session.id !== sessionId) return null;
 
@@ -591,13 +591,14 @@ export class DatabaseStorage implements IStorage {
 
     const env = scenario.environment;
     
-    // Create orchestrator with callback to log reasoning
+    // Create orchestrator with callback to log reasoning and optional booking context
     const orchestrator = new OrchestratorAgent(
       env,
       currentBuckets,
       async (agentName: string, decision: string, reasoning: string, metadata: Record<string, unknown>) => {
         await this.logReasoning(sessionId, agentName, decision, reasoning, metadata);
-      }
+      },
+      bookingContext
     );
 
     // Run the orchestration - the orchestrator will dynamically generate a plan
@@ -628,9 +629,9 @@ export class DatabaseStorage implements IStorage {
       }
       
       // Update session with recalculated revenue and load factor
-      const totalSeats = currentBuckets.reduce((sum, b) => sum + b.allocated, 0);
+      let totalSeats = currentBuckets.reduce((sum, b) => sum + b.allocated, 0);
       const soldSeats = currentBuckets.reduce((sum, b) => sum + (b.sold || 0), 0);
-      const loadFactor = totalSeats > 0 ? Math.round((soldSeats / totalSeats) * 100) : 0;
+      let loadFactor = totalSeats > 0 ? Math.round((soldSeats / totalSeats) * 100) : 0;
       
       await db.update(sessions)
         .set({ 
@@ -638,6 +639,44 @@ export class DatabaseStorage implements IStorage {
           loadFactor: loadFactor
         })
         .where(eq(sessions.id, sessionId));
+    }
+
+    // Apply seat allocation changes if seat_allocation agent ran
+    const seatResult = result.results.find(r => r.agentType === 'seat_allocation');
+    if (seatResult?.success) {
+      const output = seatResult.output as { 
+        action?: string; 
+        suggestedChanges?: Array<{ bucketCode: string; change: number }>; 
+        groupBookingAccommodated?: boolean 
+      };
+      
+      if (output.suggestedChanges && output.suggestedChanges.length > 0) {
+        // Get fresh bucket data
+        const updatedBuckets = await this.getBuckets(sessionId);
+        
+        for (const change of output.suggestedChanges) {
+          const bucket = updatedBuckets.find(b => b.code === change.bucketCode);
+          if (bucket) {
+            const newAllocation = bucket.allocated + change.change;
+            // Ensure we don't reduce below sold seats
+            const minAllocation = bucket.sold || 0;
+            const safeAllocation = Math.max(minAllocation, newAllocation);
+            
+            if (safeAllocation !== bucket.allocated) {
+              await db.update(buckets)
+                .set({ allocated: safeAllocation })
+                .where(eq(buckets.id, bucket.id));
+            }
+          }
+        }
+        
+        // Log the reallocation
+        await this.logReasoning(sessionId, "Seat Allocation Agent", 
+          `Applied reallocation: ${output.action || 'REALLOCATE'}`,
+          `Changes: ${output.suggestedChanges.map(c => `${c.bucketCode}: ${c.change > 0 ? '+' : ''}${c.change}`).join(', ')}` +
+          (bookingContext ? ` | Group booking for ${bookingContext.requestedPassengers} passengers ${output.groupBookingAccommodated ? 'ACCOMMODATED' : 'pending'}` : '')
+        );
+      }
     }
 
     return result;
@@ -653,16 +692,49 @@ export class DatabaseStorage implements IStorage {
       return errorMsg;
     }
     
-    // Run orchestration automatically to get dynamic pricing based on current environment
-    // This ensures prices are always up-to-date when users inquire about bookings
+    // Detect passenger count from message for group booking optimization
+    const passengerPatterns = [
+      /(\d+)\s*(?:passengers?|tickets?|seats?|people|persons?)/i,
+      /book(?:ing)?\s*(?:for)?\s*(\d+)/i,
+      /(\d+)\s*(?:of us|travelers?)/i,
+      /group\s*(?:of)?\s*(\d+)/i,
+      /need\s*(\d+)\s*(?:seats?|tickets?)?/i,
+    ];
+    
+    let detectedPassengers = 0;
+    for (const pattern of passengerPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        detectedPassengers = parseInt(match[1], 10);
+        break;
+      }
+    }
+    
+    // Detect class preference
+    const preferredClass = message.toLowerCase().includes('business') ? 'BUSINESS' : 
+                          message.toLowerCase().includes('economy') ? 'ECONOMY' : undefined;
+    
+    // Build booking context for large group requests (5+ passengers)
+    const bookingContext: BookingContext | undefined = detectedPassengers >= 5 ? {
+      requestedPassengers: detectedPassengers,
+      preferredClass: preferredClass
+    } : undefined;
+    
+    // Run orchestration with booking context for seat reallocation optimization
     try {
-      await this.runOrchestration(sessionId);
+      if (bookingContext) {
+        await this.logReasoning(sessionId, "Booking Agent", 
+          `Group booking request detected: ${detectedPassengers} passengers`,
+          `Running seat allocation optimization for ${preferredClass || 'Economy'} class group booking`
+        );
+      }
+      await this.runOrchestration(sessionId, bookingContext);
     } catch (e) {
       console.error("Orchestration error during chat:", e);
       // Continue with existing prices if orchestration fails
     }
     
-    // Get updated buckets after orchestration
+    // Get updated buckets after orchestration (with potentially reallocated seats)
     const currentBuckets = await this.getBuckets(sessionId);
     
     // Get conversation history for context
@@ -681,6 +753,12 @@ export class DatabaseStorage implements IStorage {
     // Calculate total availability
     const totalAvailable = bucketInfo.reduce((sum, b) => sum + b.available, 0);
     
+    // Find the best bucket for the requested group size
+    const economyBuckets = bucketInfo.filter(b => b.class === 'ECONOMY').sort((a, b) => (b.available - a.available));
+    const businessBuckets = bucketInfo.filter(b => b.class === 'BUSINESS').sort((a, b) => (b.available - a.available));
+    const bestEconomyBucket = economyBuckets[0];
+    const bestBusinessBucket = businessBuckets[0];
+    
     // Enhanced Booking Agent prompt with structured flow
     const prompt = `
       You are an Airline Booking Assistant for Indigo flight BLR-DXB (Bangalore to Dubai).
@@ -694,10 +772,15 @@ export class DatabaseStorage implements IStorage {
       AVAILABLE SEATS & PRICING (Dynamic Pricing - prices may change based on demand):
       ${bucketInfo.map(b => `${b.code} (${b.class}): ₹${b.price?.toLocaleString()} per seat - ${b.available} seats available`).join('\n')}
       
+      BEST OPTIONS FOR GROUP BOOKINGS:
+      - Economy: ${bestEconomyBucket?.code} has ${bestEconomyBucket?.available} seats at ₹${bestEconomyBucket?.price?.toLocaleString()}/seat
+      - Business: ${bestBusinessBucket?.code} has ${bestBusinessBucket?.available} seats at ₹${bestBusinessBucket?.price?.toLocaleString()}/seat
+      
       PRICING NOTES:
       - All prices shown are per passenger
       - For group bookings (2+ passengers), show total fare calculation
       - Prices are dynamic and may increase after each booking due to demand
+      - For large groups, recommend the bucket with highest availability
       
       CONVERSATION HISTORY:
       ${recentHistory}
@@ -707,12 +790,13 @@ export class DatabaseStorage implements IStorage {
       INSTRUCTIONS:
       1. If user wants to BOOK a flight, guide them through:
          - Ask for class preference (Economy or Business) if not specified
-         - Ask for number of passengers (1-10) if not specified
+         - For large groups (5+), recommend the bucket with most available seats
          - For multiple passengers, clearly show: "₹X per seat × Y passengers = ₹Z total"
-         - Recommend suitable bucket based on availability
+         - If requested passengers exceed any single bucket's availability, inform them of maximum available
          - Show price summary and ask for confirmation
          - If user CONFIRMS (says yes, confirm, book it, proceed, etc.), respond with EXACTLY this JSON format:
-           {"action": "COMPLETE_BOOKING", "bucketCode": "ECO_1", "passengers": 2, "passengerName": "Guest"}
+           {"action": "COMPLETE_BOOKING", "bucketCode": "${bestEconomyBucket?.code || 'ECO_1'}", "passengers": 15, "passengerName": "Guest"}
+           Use the bucket code that has enough seats for their group!
       
       2. If user is asking questions about pricing, availability, or flight details, answer helpfully.
          - Explain that prices are dynamic and may change based on demand
@@ -723,6 +807,7 @@ export class DatabaseStorage implements IStorage {
       4. IMPORTANT: When user confirms a booking, you MUST respond with the JSON action format above.
          Look for confirmation words like: yes, confirm, book, proceed, go ahead, do it, okay, sure
          The "passengers" field MUST match the number of tickets the user requested.
+         Choose the bucketCode that has enough availability for the group size!
       
       Respond naturally but include the JSON action when booking is confirmed.
     `;

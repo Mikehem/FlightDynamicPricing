@@ -26,15 +26,25 @@ function generatePlanId(): string {
   return `plan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
+export interface BookingContext {
+  requestedPassengers: number;
+  preferredClass?: string;
+  targetBucketCode?: string;
+}
+
 export class OrchestratorAgent {
   private a2aTrace: A2AMessage[] = [];
   private subAgentResults: Map<SubAgentType, SubAgentResult> = new Map();
+  private bookingContext?: BookingContext;
   
   constructor(
     private environment: ScenarioEnvironment,
     private buckets: Bucket[],
-    private onLog: (agentName: string, decision: string, reasoning: string, metadata: Record<string, unknown>) => Promise<void>
-  ) {}
+    private onLog: (agentName: string, decision: string, reasoning: string, metadata: Record<string, unknown>) => Promise<void>,
+    bookingContext?: BookingContext
+  ) {
+    this.bookingContext = bookingContext;
+  }
 
   async orchestrate(): Promise<OrchestrationResult> {
     this.a2aTrace = [];
@@ -461,17 +471,48 @@ RESPOND WITH JSON:
     
     const totalSeats = this.buckets.reduce((sum, b) => sum + b.allocated, 0);
     const soldSeats = this.buckets.reduce((sum, b) => sum + (b.sold || 0), 0);
+    
+    // Build pending booking context
+    let bookingContextStr = "";
+    if (this.bookingContext) {
+      const targetBucket = this.buckets.find(b => 
+        b.code === this.bookingContext?.targetBucketCode || 
+        b.class?.toLowerCase() === this.bookingContext?.preferredClass?.toLowerCase()
+      );
+      const available = targetBucket ? targetBucket.allocated - (targetBucket.sold || 0) : 0;
+      const shortage = this.bookingContext.requestedPassengers - available;
+      
+      bookingContextStr = `
+PENDING GROUP BOOKING REQUEST:
+- Passengers requested: ${this.bookingContext.requestedPassengers}
+- Preferred class: ${this.bookingContext.preferredClass || 'Economy'}
+- Target bucket: ${targetBucket?.code || 'Best available'}
+- Currently available: ${available}
+- SHORTAGE: ${shortage > 0 ? shortage : 0} seats
 
-    const prompt = `You are the Seat Allocation Agent. Manage bucket allocation.
+${shortage > 0 ? `CRITICAL: Need to reallocate ${shortage} additional seats to ${targetBucket?.code || 'economy buckets'} to fulfill this group booking. Consider moving seats from lower-demand buckets.` : ''}
+`;
+    }
+
+    const prompt = `You are the Seat Allocation Agent. Manage bucket allocation to maximize revenue while meeting demand.
 
 CONTEXT FROM OTHER AGENTS:
 Pricing: ${JSON.stringify(pricingResult?.output || {})}
 Forecast: ${JSON.stringify(forecastResult?.output || {})}
-
+${bookingContextStr}
 CURRENT ALLOCATION:
 Total Seats: ${totalSeats}
 Sold: ${soldSeats}
-${this.buckets.map(b => `${b.code} (${b.class}): ${b.allocated} allocated, ${b.sold || 0} sold`).join('\n')}
+${this.buckets.map(b => {
+  const avail = b.allocated - (b.sold || 0);
+  return `${b.code} (${b.class}): ${b.allocated} allocated, ${b.sold || 0} sold, ${avail} available`;
+}).join('\n')}
+
+REALLOCATION RULES:
+1. Never reduce allocation below sold count for any bucket
+2. For group bookings, prioritize making enough seats available
+3. Move seats from low-demand/high-price buckets to fulfill group requests
+4. Maintain business class allocation unless urgent
 
 RESPOND WITH JSON:
 {
@@ -481,7 +522,8 @@ RESPOND WITH JSON:
   "suggestedChanges": [
     {"bucketCode": "ECO_1", "change": -5},
     {"bucketCode": "ECO_2", "change": 5}
-  ]
+  ],
+  "groupBookingAccommodated": true/false
 }`;
 
     try {
