@@ -574,6 +574,80 @@ export class DatabaseStorage implements IStorage {
     
     if (!scenario) return;
 
+    const env = scenario.environment;
+    const totalSeats = 192;
+    const soldSeats = currentBuckets.reduce((sum, b) => sum + (b.sold || 0), 0);
+    const currentOccupancy = Math.round((soldSeats / totalSeats) * 100);
+    const daysLeft = env.daysToDeparture;
+    const expectedOccupancy = env.expectedOccupancyToday;
+
+    // 0. OBJECTIVE SELECTION AGENT - Determines system goal
+    const objectivePrompt = `
+      You are an Airline Pricing Objective Selection Agent.
+      Your role is to determine the optimal business objective for this flight.
+      
+      CONTEXT:
+      - Scenario: ${scenario.name}
+      - Description: ${scenario.description}
+      - Days to departure: ${daysLeft}
+      - Current occupancy: ${currentOccupancy}% (${soldSeats}/${totalSeats} seats)
+      - Expected occupancy at this point: ${expectedOccupancy}%
+      - Event impact: ${env.eventImpact || "None"}
+      - Competitor prices: ${JSON.stringify(env.competitors)}
+      
+      POSSIBLE OBJECTIVES:
+      1. REVENUE_MAXIMIZATION - Focus on maximizing ticket revenue per seat
+      2. OCCUPANCY_MAXIMIZATION - Focus on filling as many seats as possible
+      3. COMPETITIVE_MATCHING - Focus on matching or undercutting competitor prices
+      
+      DECISION GUIDELINES:
+      - If > 30 days to departure AND demand is low → OCCUPANCY_MAXIMIZATION (need to fill seats early)
+      - If < 10 days to departure AND demand is high → REVENUE_MAXIMIZATION (capitalize on urgency)
+      - If competitors are aggressively pricing AND occupancy is below target → COMPETITIVE_MATCHING
+      - If on track with targets → REVENUE_MAXIMIZATION (optimize profits)
+      - If behind on occupancy targets → OCCUPANCY_MAXIMIZATION (fill seats)
+      
+      Return JSON with this EXACT structure:
+      {
+        "objective": "REVENUE_MAXIMIZATION or OCCUPANCY_MAXIMIZATION or COMPETITIVE_MATCHING",
+        "confidence": "HIGH or MEDIUM or LOW",
+        "primaryReason": "Main reason for this choice",
+        "factors": ["factor1", "factor2", "factor3"],
+        "riskAssessment": "What could go wrong with this strategy"
+      }
+    `;
+    
+    let systemObjective = { 
+      objective: "REVENUE_MAXIMIZATION", 
+      confidence: "MEDIUM",
+      primaryReason: "Default strategy",
+      factors: [],
+      riskAssessment: "Default assessment"
+    };
+    
+    try {
+      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: objectivePrompt }] }] });
+      let text = "";
+      for await (const chunk of stream) {
+        text += chunk.text || "";
+      }
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        systemObjective = JSON.parse(jsonMatch[0]);
+      }
+      const confidenceLabel = systemObjective.confidence === "HIGH" ? "[HIGH]" : systemObjective.confidence === "MEDIUM" ? "[MEDIUM]" : "[LOW]";
+      await this.logReasoning(sessionId, "Objective Agent", 
+        `${confidenceLabel} ${systemObjective.objective}`,
+        `${systemObjective.primaryReason}\n\nKey Factors:\n${(systemObjective.factors || []).map((f: string) => `- ${f}`).join('\n')}\n\nRisk: ${systemObjective.riskAssessment}`
+      );
+    } catch (e) {
+      console.error("Objective Selection Error", e);
+      await this.logReasoning(sessionId, "Objective Agent", 
+        "[MEDIUM] REVENUE_MAXIMIZATION",
+        "Defaulting to revenue maximization due to analysis error."
+      );
+    }
+
     // 1. FORECAST AGENT
     const forecastPrompt = `
       You are an Airline Demand Forecast Agent.
@@ -598,30 +672,23 @@ export class DatabaseStorage implements IStorage {
       console.error("Forecast Error", e);
     }
 
-    // 2. PRICING AGENT - Feature-based multipliers
-    const env = scenario.environment;
-    const totalSeats = 192;
-    const soldSeats = currentBuckets.reduce((sum, b) => sum + (b.sold || 0), 0);
-    const currentOccupancy = Math.round((soldSeats / totalSeats) * 100);
-    const daysLeft = env.daysToDeparture;
-    
-    // Calculate current revenue
+    // 2. PRICING AGENT - Feature-based multipliers (uses objective from Objective Agent)
     const currentRevenue = currentBuckets.reduce((sum, b) => sum + (b.sold || 0) * b.price, 0);
     const revenueTarget = env.revenueTarget || 2000000;
     const occupancyTarget = env.occupancyTarget || 80;
-    
-    // Determine optimization strategy based on current performance
     const revenueProgress = (currentRevenue / revenueTarget) * 100;
-    const occupancyProgress = currentOccupancy;
     
     const pricingPrompt = `
       You are a Feature-Based Dynamic Pricing Agent for airline tickets.
+      
+      SYSTEM OBJECTIVE (set by Objective Agent): ${systemObjective.objective}
+      Objective Rationale: ${systemObjective.primaryReason}
       
       CONTEXT:
       - Scenario: ${scenario.name}
       - Days to departure: ${daysLeft} (of 60-day window)
       - Current occupancy: ${currentOccupancy}% (${soldSeats}/${totalSeats} seats)
-      - Expected occupancy: ${env.expectedOccupancyToday}%
+      - Expected occupancy: ${expectedOccupancy}%
       - Target occupancy: ${occupancyTarget}%
       - Demand score: ${forecast.demandScore} (0-1 scale)
       - Fuel cost index: ${env.fuelCostIndex} (1.0 = normal)
@@ -635,17 +702,16 @@ export class DatabaseStorage implements IStorage {
       - Revenue progress: ${revenueProgress.toFixed(1)}%
       
       TASK: 
-      1. Choose an OPTIMIZATION STRATEGY: Either "REVENUE_MAXIMIZATION" or "SEAT_FILL_RATE"
-         - Use REVENUE_MAXIMIZATION when demand is high and you can charge premium prices
-         - Use SEAT_FILL_RATE when occupancy is lagging and you need to fill seats
-      2. Predict MULTIPLIERS for each pricing feature
+      Set MULTIPLIERS aligned with the system objective: ${systemObjective.objective}
+      - REVENUE_MAXIMIZATION: Favor higher multipliers to maximize revenue per seat
+      - OCCUPANCY_MAXIMIZATION: Favor lower multipliers to attract more bookings
+      - COMPETITIVE_MATCHING: Match competitor pricing closely
       
       CONSTRAINT: Final combined multiplier should be between 0.80 and 1.20 (±20% max change).
       
       Return JSON with this EXACT structure:
       {
-        "strategy": "REVENUE_MAXIMIZATION or SEAT_FILL_RATE",
-        "strategyReason": "Why this strategy was chosen",
+        "alignedObjective": "${systemObjective.objective}",
         "multipliers": {
           "demand": { "value": 1.05, "reason": "Brief explanation" },
           "urgency": { "value": 1.02, "reason": "Brief explanation" },
@@ -653,7 +719,7 @@ export class DatabaseStorage implements IStorage {
           "fuel": { "value": 1.03, "reason": "Brief explanation" },
           "seasonality": { "value": 1.02, "reason": "Brief explanation" }
         },
-        "summary": "Overall pricing strategy explanation"
+        "summary": "How multipliers support the ${systemObjective.objective} objective"
       }
     `;
 
@@ -707,15 +773,16 @@ export class DatabaseStorage implements IStorage {
       // Clamp to ±20% max change
       const clampedMultiplier = Math.max(0.80, Math.min(1.20, combinedMultiplier));
       
-      // Extract strategy from AI response
-      const strategy = result.strategy === "SEAT_FILL_RATE" ? "SEAT_FILL_RATE" : "REVENUE_MAXIMIZATION";
-      const strategyReason = result.strategyReason || "Optimizing based on current market conditions";
+      // Use objective from Objective Agent (validated and passed through)
+      const objective = systemObjective.objective;
+      const objectiveReason = systemObjective.primaryReason || "Based on current market conditions";
       
       // Calculate projected values after price change
       // Projected revenue = current revenue + (unsold seats * avg new price * estimated conversion rate)
       const avgNewPrice = currentBuckets.reduce((sum, b) => sum + b.basePrice * clampedMultiplier, 0) / currentBuckets.length;
       const unsoldSeats = totalSeats - soldSeats;
-      const conversionRate = strategy === "SEAT_FILL_RATE" ? 0.7 : 0.5; // Higher conversion when focusing on filling seats
+      // Higher conversion when focusing on filling seats
+      const conversionRate = objective === "OCCUPANCY_MAXIMIZATION" ? 0.7 : objective === "COMPETITIVE_MATCHING" ? 0.6 : 0.5;
       const projectedAdditionalRevenue = Math.round(unsoldSeats * avgNewPrice * conversionRate * 0.6);
       const projectedRevenue = currentRevenue + projectedAdditionalRevenue;
       
@@ -727,15 +794,20 @@ export class DatabaseStorage implements IStorage {
         .map(([feature, data]) => `• ${feature.charAt(0).toUpperCase() + feature.slice(1)}: ${data.value}x - ${data.reason}`)
         .join('\n');
       
-      const strategyLabel = strategy === "REVENUE_MAXIMIZATION" ? "Revenue Maximization" : "Seat Fill Rate";
-      const fullReasoning = `Optimization: ${strategyLabel}\n${strategyReason}\n\nCombined Multiplier: ${clampedMultiplier.toFixed(3)}x\n\n${multiplierBreakdown}\n\nStrategy: ${result.summary || "Optimizing prices based on current market conditions."}`;
+      const objectiveLabels: Record<string, string> = {
+        "REVENUE_MAXIMIZATION": "Revenue Maximization",
+        "OCCUPANCY_MAXIMIZATION": "Occupancy Maximization", 
+        "COMPETITIVE_MATCHING": "Competitive Matching"
+      };
+      const objectiveLabel = objectiveLabels[objective] || "Revenue Maximization";
+      const fullReasoning = `Objective: ${objectiveLabel}\n${objectiveReason}\n\nCombined Multiplier: ${clampedMultiplier.toFixed(3)}x\n\n${multiplierBreakdown}\n\nApproach: ${result.summary || "Optimizing prices based on current market conditions."}`;
       
-      // Build comprehensive metadata with strategy and metrics
+      // Build comprehensive metadata with objective and metrics
       const metadata = {
         ...multipliers,
         optimization: {
-          strategy,
-          strategyReason,
+          objective,
+          objectiveReason,
           metrics: {
             revenue: {
               current: currentRevenue,
@@ -759,7 +831,7 @@ export class DatabaseStorage implements IStorage {
       await db.insert(reasoningLogs).values({
         sessionId,
         agentName: "Pricing Agent",
-        decision: `${strategyLabel} | Multiplier: ${clampedMultiplier.toFixed(2)}x`,
+        decision: `${objectiveLabel} | Multiplier: ${clampedMultiplier.toFixed(2)}x`,
         reasoning: fullReasoning,
         metadata: JSON.stringify(metadata)
       });
