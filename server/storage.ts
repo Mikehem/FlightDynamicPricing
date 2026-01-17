@@ -358,9 +358,11 @@ export class DatabaseStorage implements IStorage {
     
     let forecast = { demandScore: 0.5, reasoning: "Default forecast" };
     try {
-      const resp = await ai.models.generateContent({ model, contents: [{ role: "user", parts: [{ text: forecastPrompt }] }] });
-      const text = resp.response.text();
-      // Simple parsing - assumes model follows instructions well. In prod, use structured output.
+      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: forecastPrompt }] }] });
+      let text = "";
+      for await (const chunk of stream) {
+        text += chunk.text || "";
+      }
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) forecast = JSON.parse(jsonMatch[0]);
       await this.logReasoning(sessionId, "Forecast Agent", `Demand Score: ${forecast.demandScore}`, forecast.reasoning);
@@ -380,8 +382,11 @@ export class DatabaseStorage implements IStorage {
     `;
 
     try {
-      const resp = await ai.models.generateContent({ model, contents: [{ role: "user", parts: [{ text: pricingPrompt }] }] });
-      const text = resp.response.text();
+      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: pricingPrompt }] }] });
+      let text = "";
+      for await (const chunk of stream) {
+        text += chunk.text || "";
+      }
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const result = JSON.parse(jsonMatch[0]);
@@ -416,8 +421,12 @@ export class DatabaseStorage implements IStorage {
 
     let responseText = "I'm having trouble connecting to the reservation system.";
     try {
-      const resp = await ai.models.generateContent({ model, contents: [{ role: "user", parts: [{ text: prompt }] }] });
-      responseText = resp.response.text();
+      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: prompt }] }] });
+      let text = "";
+      for await (const chunk of stream) {
+        text += chunk.text || "";
+      }
+      responseText = text;
     } catch (e) {
       console.error("Chat Error", e);
     }
