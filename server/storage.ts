@@ -17,12 +17,16 @@ function generateBookingReference(): string {
 }
 
 // Initialize Gemini Client
+// Supports both Replit AI Integrations and standalone .env configuration
+const geminiApiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "dummy";
+const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+
 const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY || "dummy",
-  httpOptions: {
+  apiKey: geminiApiKey,
+  httpOptions: geminiBaseUrl ? {
     apiVersion: "",
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
-  },
+    baseUrl: geminiBaseUrl,
+  } : undefined,
 });
 const model = "gemini-2.5-flash"; // Fast model for agents
 
