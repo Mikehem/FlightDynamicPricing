@@ -1,10 +1,20 @@
 import { db } from "./db";
 import { 
-  sessions, buckets, reasoningLogs, pricingHistory, chatMessages,
-  type Session, type Bucket, type ReasoningLog, type ChatMessage, type ScenarioDef
+  sessions, buckets, reasoningLogs, pricingHistory, chatMessages, bookings,
+  type Session, type Bucket, type ReasoningLog, type ChatMessage, type ScenarioDef, type Booking
 } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
+
+// Generate booking reference code
+function generateBookingReference(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = 'IND-';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 
 // Initialize Gemini Client
 const ai = new GoogleGenAI({
@@ -557,17 +567,61 @@ export class DatabaseStorage implements IStorage {
     
     const session = await this.getCurrentSession();
     const currentBuckets = await this.getBuckets(sessionId);
+    if (!session) {
+      const errorMsg = "No active session. Please load a scenario first.";
+      await db.insert(chatMessages).values({ sessionId, role: "assistant", content: errorMsg });
+      return errorMsg;
+    }
     
-    // Booking Agent
+    // Get conversation history for context
+    const history = await this.getChatHistory(sessionId);
+    const recentHistory = history.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n');
+    
+    // Build bucket info with availability
+    const bucketInfo = currentBuckets.map(b => ({
+      code: b.code,
+      class: b.class,
+      price: b.price,
+      available: b.allocated - (b.sold || 0),
+      id: b.id
+    }));
+    
+    // Enhanced Booking Agent prompt with structured flow
     const prompt = `
-      You are an Airline Booking Assistant for Indigo flight BLR-DXB.
-      User says: "${message}"
-      Current Prices: ${JSON.stringify(currentBuckets.map(b => `${b.code}: ₹${b.price} (${b.class})`))}
+      You are an Airline Booking Assistant for Indigo flight BLR-DXB (Bangalore to Dubai).
       
-      Help the user book. Be concise and professional.
+      FLIGHT DETAILS:
+      - Route: BLR → DXB (Bangalore to Dubai)
+      - Airline: Indigo
+      - Departure: ${session.departureDate ? new Date(session.departureDate).toLocaleDateString() : 'TBD'}
+      
+      AVAILABLE SEATS & PRICING:
+      ${bucketInfo.map(b => `${b.code} (${b.class}): ₹${b.price?.toLocaleString()} - ${b.available} seats available`).join('\n')}
+      
+      CONVERSATION HISTORY:
+      ${recentHistory}
+      
+      USER MESSAGE: "${message}"
+      
+      INSTRUCTIONS:
+      1. If user wants to BOOK a flight, guide them through:
+         - Ask for class preference (Economy or Business) if not specified
+         - Ask for number of passengers (1-4) if not specified
+         - Show price summary and ask for confirmation
+         - If user CONFIRMS (says yes, confirm, book it, proceed, etc.), respond with EXACTLY this JSON format:
+           {"action": "COMPLETE_BOOKING", "bucketCode": "ECO_1", "passengers": 1, "passengerName": "Guest"}
+      
+      2. If user is asking questions about pricing, availability, or flight details, answer helpfully.
+      
+      3. Be concise, friendly, and professional. Use ₹ for prices.
+      
+      4. IMPORTANT: When user confirms a booking, you MUST respond with the JSON action format above.
+         Look for confirmation words like: yes, confirm, book, proceed, go ahead, do it, okay, sure
+      
+      Respond naturally but include the JSON action when booking is confirmed.
     `;
 
-    let responseText = "I'm having trouble connecting to the reservation system.";
+    let responseText = "I'm having trouble connecting to the reservation system. Please try again.";
     try {
       const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: prompt }] }] });
       let text = "";
@@ -575,6 +629,82 @@ export class DatabaseStorage implements IStorage {
         text += chunk.text || "";
       }
       responseText = text;
+      
+      // Check if response contains booking action
+      const actionMatch = responseText.match(/\{"action"\s*:\s*"COMPLETE_BOOKING"[^}]+\}/);
+      if (actionMatch) {
+        try {
+          const action = JSON.parse(actionMatch[0]);
+          if (action.action === "COMPLETE_BOOKING") {
+            // Find the bucket
+            const bucket = currentBuckets.find(b => b.code === action.bucketCode);
+            if (bucket) {
+              const passengers = action.passengers || 1;
+              const available = bucket.allocated - (bucket.sold || 0);
+              
+              if (available >= passengers) {
+                // Complete the booking
+                const referenceCode = generateBookingReference();
+                const pricePerSeat = bucket.price || 0;
+                const totalFare = pricePerSeat * passengers;
+                
+                // Insert booking record
+                await db.insert(bookings).values({
+                  sessionId,
+                  bucketId: bucket.id,
+                  referenceCode,
+                  passengerCount: passengers,
+                  pricePerSeat,
+                  totalFare,
+                  passengerName: action.passengerName || "Guest",
+                  status: "CONFIRMED"
+                });
+                
+                // Update bucket sold count
+                await db.update(buckets)
+                  .set({ sold: (bucket.sold || 0) + passengers })
+                  .where(eq(buckets.id, bucket.id));
+                
+                // Update session revenue
+                await db.update(sessions)
+                  .set({ totalRevenue: (session.totalRevenue || 0) + totalFare })
+                  .where(eq(sessions.id, sessionId));
+                
+                // Log to agent reasoning
+                await this.logReasoning(sessionId, "Booking Agent", 
+                  `Booking Confirmed: ${referenceCode}`,
+                  `Completed booking for ${passengers} passenger(s) in ${bucket.class} class (${bucket.code}). Total fare: ₹${totalFare.toLocaleString()}. Reference: ${referenceCode}`
+                );
+                
+                // Generate confirmation message
+                responseText = `
+🎉 **Booking Confirmed!**
+
+**Booking Reference:** ${referenceCode}
+
+**Flight Details:**
+- Route: BLR → DXB (Bangalore to Dubai)
+- Airline: Indigo
+- Departure: ${session.departureDate ? new Date(session.departureDate).toLocaleDateString() : 'TBD'}
+
+**Fare Details:**
+- Class: ${bucket.class}
+- Fare Type: ${bucket.code}
+- Passengers: ${passengers}
+- Price per seat: ₹${pricePerSeat.toLocaleString()}
+- **Total Fare: ₹${totalFare.toLocaleString()}**
+
+Your booking has been confirmed. Have a great flight! ✈️
+                `.trim();
+              } else {
+                responseText = `Sorry, only ${available} seat(s) available in ${bucket.code}. Please choose fewer passengers or a different fare class.`;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Booking action parse error:", e);
+        }
+      }
     } catch (e) {
       console.error("Chat Error", e);
     }

@@ -55,7 +55,22 @@ export const chatMessages = pgTable("session_chat_messages", {
   sessionId: integer("session_id").notNull(),
   role: text("role").notNull(), // 'user', 'assistant'
   content: text("content").notNull(),
+  metadata: jsonb("metadata"), // For tracking booking state
   timestamp: timestamp("timestamp").defaultNow(),
+});
+
+// === BOOKINGS ===
+export const bookings = pgTable("bookings", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull(),
+  bucketId: integer("bucket_id").notNull(),
+  referenceCode: text("reference_code").notNull(), // e.g., 'IND-BLR-DXB-ABC123'
+  passengerCount: integer("passenger_count").notNull().default(1),
+  pricePerSeat: real("price_per_seat").notNull(),
+  totalFare: real("total_fare").notNull(),
+  passengerName: text("passenger_name"),
+  status: text("status").notNull().default("CONFIRMED"), // CONFIRMED, CANCELLED
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 
@@ -65,6 +80,18 @@ export const sessionRelations = relations(sessions, ({ many }) => ({
   logs: many(reasoningLogs),
   history: many(pricingHistory),
   chat: many(chatMessages),
+  bookings: many(bookings),
+}));
+
+export const bookingRelations = relations(bookings, ({ one }) => ({
+  session: one(sessions, {
+    fields: [bookings.sessionId],
+    references: [sessions.id],
+  }),
+  bucket: one(buckets, {
+    fields: [bookings.bucketId],
+    references: [buckets.id],
+  }),
 }));
 
 export const bucketRelations = relations(buckets, ({ one }) => ({
@@ -79,12 +106,14 @@ export const insertSessionSchema = createInsertSchema(sessions).omit({ id: true,
 export const insertBucketSchema = createInsertSchema(buckets).omit({ id: true });
 export const insertLogSchema = createInsertSchema(reasoningLogs).omit({ id: true, timestamp: true });
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, timestamp: true });
+export const insertBookingSchema = createInsertSchema(bookings).omit({ id: true, createdAt: true });
 
 // === EXPLICIT TYPES ===
 export type Session = typeof sessions.$inferSelect;
 export type Bucket = typeof buckets.$inferSelect;
 export type ReasoningLog = typeof reasoningLogs.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+export type Booking = typeof bookings.$inferSelect;
 
 // Scenario definition type (not in DB, just logic)
 // Demand forecast point for a specific day
