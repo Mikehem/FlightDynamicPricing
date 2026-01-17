@@ -377,6 +377,15 @@ export class DatabaseStorage implements IStorage {
     const currentOccupancy = Math.round((soldSeats / totalSeats) * 100);
     const daysLeft = env.daysToDeparture;
     
+    // Calculate current revenue
+    const currentRevenue = currentBuckets.reduce((sum, b) => sum + (b.sold || 0) * b.price, 0);
+    const revenueTarget = env.revenueTarget || 2000000;
+    const occupancyTarget = env.occupancyTarget || 80;
+    
+    // Determine optimization strategy based on current performance
+    const revenueProgress = (currentRevenue / revenueTarget) * 100;
+    const occupancyProgress = currentOccupancy;
+    
     const pricingPrompt = `
       You are a Feature-Based Dynamic Pricing Agent for airline tickets.
       
@@ -385,21 +394,30 @@ export class DatabaseStorage implements IStorage {
       - Days to departure: ${daysLeft} (of 60-day window)
       - Current occupancy: ${currentOccupancy}% (${soldSeats}/${totalSeats} seats)
       - Expected occupancy: ${env.expectedOccupancyToday}%
+      - Target occupancy: ${occupancyTarget}%
       - Demand score: ${forecast.demandScore} (0-1 scale)
       - Fuel cost index: ${env.fuelCostIndex} (1.0 = normal)
       - Seasonality index: ${env.seasonalityIndex} (higher = peak season)
       - Competition: ${JSON.stringify(env.competitors)}
       - Event: ${env.eventImpact || "None"}
       
-      TASK: Predict MULTIPLIERS for each pricing feature. Each multiplier adjusts the base price.
-      - Multiplier of 1.0 = no change
-      - Multiplier > 1.0 = price increase (e.g., 1.15 = +15%)
-      - Multiplier < 1.0 = price decrease (e.g., 0.90 = -10%)
+      REVENUE METRICS:
+      - Current revenue: ₹${currentRevenue.toLocaleString()}
+      - Revenue target: ₹${revenueTarget.toLocaleString()}
+      - Revenue progress: ${revenueProgress.toFixed(1)}%
+      
+      TASK: 
+      1. Choose an OPTIMIZATION STRATEGY: Either "REVENUE_MAXIMIZATION" or "SEAT_FILL_RATE"
+         - Use REVENUE_MAXIMIZATION when demand is high and you can charge premium prices
+         - Use SEAT_FILL_RATE when occupancy is lagging and you need to fill seats
+      2. Predict MULTIPLIERS for each pricing feature
       
       CONSTRAINT: Final combined multiplier should be between 0.80 and 1.20 (±20% max change).
       
       Return JSON with this EXACT structure:
       {
+        "strategy": "REVENUE_MAXIMIZATION or SEAT_FILL_RATE",
+        "strategyReason": "Why this strategy was chosen",
         "multipliers": {
           "demand": { "value": 1.05, "reason": "Brief explanation" },
           "urgency": { "value": 1.02, "reason": "Brief explanation" },
@@ -459,20 +477,61 @@ export class DatabaseStorage implements IStorage {
       // Clamp to ±20% max change
       const clampedMultiplier = Math.max(0.80, Math.min(1.20, combinedMultiplier));
       
+      // Extract strategy from AI response
+      const strategy = result.strategy === "SEAT_FILL_RATE" ? "SEAT_FILL_RATE" : "REVENUE_MAXIMIZATION";
+      const strategyReason = result.strategyReason || "Optimizing based on current market conditions";
+      
+      // Calculate projected values after price change
+      // Projected revenue = current revenue + (unsold seats * avg new price * estimated conversion rate)
+      const avgNewPrice = currentBuckets.reduce((sum, b) => sum + b.basePrice * clampedMultiplier, 0) / currentBuckets.length;
+      const unsoldSeats = totalSeats - soldSeats;
+      const conversionRate = strategy === "SEAT_FILL_RATE" ? 0.7 : 0.5; // Higher conversion when focusing on filling seats
+      const projectedAdditionalRevenue = Math.round(unsoldSeats * avgNewPrice * conversionRate * 0.6);
+      const projectedRevenue = currentRevenue + projectedAdditionalRevenue;
+      
+      // Projected occupancy based on strategy
+      const projectedOccupancy = Math.min(100, Math.round(currentOccupancy + (unsoldSeats * conversionRate * 0.6 / totalSeats) * 100));
+      
       // Build detailed reasoning with multiplier breakdown
       const multiplierBreakdown = Object.entries(multipliers)
         .map(([feature, data]) => `• ${feature.charAt(0).toUpperCase() + feature.slice(1)}: ${data.value}x - ${data.reason}`)
         .join('\n');
       
-      const fullReasoning = `Combined Multiplier: ${clampedMultiplier.toFixed(3)}x\n\n${multiplierBreakdown}\n\nStrategy: ${result.summary || "Optimizing prices based on current market conditions."}`;
+      const strategyLabel = strategy === "REVENUE_MAXIMIZATION" ? "Revenue Maximization" : "Seat Fill Rate";
+      const fullReasoning = `Optimization: ${strategyLabel}\n${strategyReason}\n\nCombined Multiplier: ${clampedMultiplier.toFixed(3)}x\n\n${multiplierBreakdown}\n\nStrategy: ${result.summary || "Optimizing prices based on current market conditions."}`;
+      
+      // Build comprehensive metadata with strategy and metrics
+      const metadata = {
+        ...multipliers,
+        optimization: {
+          strategy,
+          strategyReason,
+          metrics: {
+            revenue: {
+              current: currentRevenue,
+              projected: projectedRevenue,
+              target: revenueTarget,
+              change: projectedRevenue - currentRevenue,
+              changePercent: currentRevenue > 0 ? Math.round(((projectedRevenue - currentRevenue) / currentRevenue) * 100) : 0
+            },
+            occupancy: {
+              current: currentOccupancy,
+              projected: projectedOccupancy,
+              target: occupancyTarget,
+              change: projectedOccupancy - currentOccupancy,
+              changePercent: currentOccupancy > 0 ? Math.round(((projectedOccupancy - currentOccupancy) / currentOccupancy) * 100) : 0
+            }
+          }
+        }
+      };
       
       // Store multipliers in metadata for frontend display
       await db.insert(reasoningLogs).values({
         sessionId,
         agentName: "Pricing Agent",
-        decision: `Multiplier: ${clampedMultiplier.toFixed(2)}x`,
+        decision: `${strategyLabel} | Multiplier: ${clampedMultiplier.toFixed(2)}x`,
         reasoning: fullReasoning,
-        metadata: JSON.stringify(multipliers)
+        metadata: JSON.stringify(metadata)
       });
       
       // Apply multiplier to all buckets with class-based scaling

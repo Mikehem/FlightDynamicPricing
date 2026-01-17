@@ -3,12 +3,29 @@ import { Badge } from "@/components/ui/badge";
 import type { ReasoningLog } from "@shared/schema";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { BrainCircuit, Activity, LineChart, TrendingUp, TrendingDown, Minus, Fuel, Calendar, Users, Clock, Zap } from "lucide-react";
+import { BrainCircuit, Activity, LineChart, TrendingUp, TrendingDown, Minus, Fuel, Calendar, Users, Clock, Zap, Target, DollarSign, Armchair, ArrowUp, ArrowDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface MultiplierData {
   value: number;
   reason: string;
+}
+
+interface MetricData {
+  current: number;
+  projected: number;
+  target: number;
+  change: number;
+  changePercent: number;
+}
+
+interface OptimizationData {
+  strategy: "REVENUE_MAXIMIZATION" | "SEAT_FILL_RATE";
+  strategyReason: string;
+  metrics: {
+    revenue: MetricData;
+    occupancy: MetricData;
+  };
 }
 
 interface Multipliers {
@@ -17,6 +34,7 @@ interface Multipliers {
   competition?: MultiplierData;
   fuel?: MultiplierData;
   seasonality?: MultiplierData;
+  optimization?: OptimizationData;
 }
 
 const featureIcons: Record<string, any> = {
@@ -50,6 +68,148 @@ function MultiplierBadge({ value }: { value: number }) {
       <Icon className="w-3 h-3" />
       {value.toFixed(2)}x
     </span>
+  );
+}
+
+function formatCurrency(value: number): string {
+  if (value >= 10000000) {
+    return `₹${(value / 10000000).toFixed(2)}Cr`;
+  } else if (value >= 100000) {
+    return `₹${(value / 100000).toFixed(2)}L`;
+  } else if (value >= 1000) {
+    return `₹${(value / 1000).toFixed(1)}K`;
+  }
+  return `₹${value.toLocaleString()}`;
+}
+
+function MetricCard({ 
+  label, 
+  icon: Icon, 
+  current, 
+  projected, 
+  target, 
+  change, 
+  changePercent,
+  isPercentage = false 
+}: { 
+  label: string;
+  icon: any;
+  current: number;
+  projected: number;
+  target: number;
+  change: number;
+  changePercent: number;
+  isPercentage?: boolean;
+}) {
+  const isPositive = change > 0;
+  const isNegative = change < 0;
+  const ChangeIcon = isPositive ? ArrowUp : isNegative ? ArrowDown : Minus;
+  const progressToTarget = isPercentage 
+    ? Math.min(100, (projected / target) * 100)
+    : Math.min(100, (projected / target) * 100);
+  
+  return (
+    <div className="p-3 rounded-lg bg-background/50 border border-border/50" data-testid={`metric-${label.toLowerCase().replace(' ', '-')}`}>
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className="w-4 h-4 text-muted-foreground" />
+        <span className="text-xs font-semibold">{label}</span>
+      </div>
+      
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase">Current</div>
+          <div className="text-sm font-bold">
+            {isPercentage ? `${current}%` : formatCurrency(current)}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase">Projected</div>
+          <div className={cn(
+            "text-sm font-bold",
+            isPositive ? "text-green-600" : change < 0 ? "text-red-600" : ""
+          )}>
+            {isPercentage ? `${projected}%` : formatCurrency(projected)}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-muted-foreground uppercase">Target</div>
+          <div className="text-sm font-bold text-primary">
+            {isPercentage ? `${target}%` : formatCurrency(target)}
+          </div>
+        </div>
+      </div>
+      
+      <div className="mt-2 flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <ChangeIcon className={cn("w-3 h-3", isPositive ? "text-green-500" : isNegative ? "text-red-500" : "text-slate-400")} />
+          <span className={cn(
+            "text-xs font-bold",
+            isPositive ? "text-green-600" : isNegative ? "text-red-600" : "text-slate-500"
+          )}>
+            {isPositive ? "+" : ""}{isPercentage ? change : formatCurrency(change)} ({changePercent}%)
+          </span>
+        </div>
+        <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+          <div 
+            className={cn(
+              "h-full rounded-full transition-all",
+              progressToTarget >= 100 ? "bg-green-500" : progressToTarget >= 75 ? "bg-yellow-500" : "bg-primary"
+            )}
+            style={{ width: `${Math.min(100, progressToTarget)}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OptimizationStrategy({ optimization }: { optimization: OptimizationData }) {
+  const isRevenue = optimization.strategy === "REVENUE_MAXIMIZATION";
+  const StrategyIcon = isRevenue ? DollarSign : Armchair;
+  const strategyLabel = isRevenue ? "Revenue Maximization" : "Seat Fill Rate";
+  const strategyColor = isRevenue 
+    ? "bg-emerald-500/10 text-emerald-600 border-emerald-300 dark:border-emerald-700"
+    : "bg-blue-500/10 text-blue-600 border-blue-300 dark:border-blue-700";
+  
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Target className="w-4 h-4 text-primary" />
+        <span className="text-xs font-semibold text-foreground/80">Optimization Strategy:</span>
+      </div>
+      
+      <div className={cn("flex items-center gap-2 p-2 rounded-lg border", strategyColor)} data-testid="optimization-strategy">
+        <StrategyIcon className="w-5 h-5" />
+        <div className="flex-1">
+          <div className="font-bold text-sm">{strategyLabel}</div>
+          <div className="text-xs opacity-80">{optimization.strategyReason}</div>
+        </div>
+      </div>
+      
+      <div className="text-xs font-semibold text-foreground/80 mt-2">Impact Analysis:</div>
+      <div className="grid gap-2">
+        <MetricCard
+          label="Revenue"
+          icon={DollarSign}
+          current={optimization.metrics.revenue.current}
+          projected={optimization.metrics.revenue.projected}
+          target={optimization.metrics.revenue.target}
+          change={optimization.metrics.revenue.change}
+          changePercent={optimization.metrics.revenue.changePercent}
+          isPercentage={false}
+        />
+        <MetricCard
+          label="Occupancy"
+          icon={Armchair}
+          current={optimization.metrics.occupancy.current}
+          projected={optimization.metrics.occupancy.projected}
+          target={optimization.metrics.occupancy.target}
+          change={optimization.metrics.occupancy.change}
+          changePercent={optimization.metrics.occupancy.changePercent}
+          isPercentage={true}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -174,8 +334,16 @@ export function AgentLogs({ logs }: AgentLogsProps) {
                             ? JSON.parse(log.metadata) 
                             : log.metadata;
                           
-                          if (meta.demand || meta.urgency || meta.competition || meta.fuel || meta.seasonality) {
-                            return <MultiplierBreakdown multipliers={meta as Multipliers} />;
+                          const hasMultipliers = meta.demand || meta.urgency || meta.competition || meta.fuel || meta.seasonality;
+                          const hasOptimization = meta.optimization?.strategy;
+                          
+                          if (hasOptimization || hasMultipliers) {
+                            return (
+                              <>
+                                {hasOptimization && <OptimizationStrategy optimization={meta.optimization} />}
+                                {hasMultipliers && <MultiplierBreakdown multipliers={meta as Multipliers} />}
+                              </>
+                            );
                           }
                           
                           if (Object.keys(meta).length > 0) {
