@@ -370,15 +370,45 @@ export class DatabaseStorage implements IStorage {
       console.error("Forecast Error", e);
     }
 
-    // 2. PRICING AGENT
+    // 2. PRICING AGENT - Feature-based multipliers
+    const env = scenario.environment;
+    const totalSeats = 192;
+    const soldSeats = currentBuckets.reduce((sum, b) => sum + (b.sold || 0), 0);
+    const currentOccupancy = Math.round((soldSeats / totalSeats) * 100);
+    const daysLeft = env.daysToDeparture;
+    
     const pricingPrompt = `
-      You are a Dynamic Pricing Agent.
-      Scenario: ${scenario.name}.
-      Demand Score: ${forecast.demandScore}.
-      Current Buckets: ${JSON.stringify(currentBuckets.map(b => ({ code: b.code, price: b.price, base: b.basePrice })))}
+      You are a Feature-Based Dynamic Pricing Agent for airline tickets.
       
-      Decide new prices. Rule: Don't change price by more than 20% at once.
-      Return JSON: { "updates": [{ "code": "ECO_1", "newPrice": 12500 }], "reasoning": "string" }
+      CONTEXT:
+      - Scenario: ${scenario.name}
+      - Days to departure: ${daysLeft} (of 60-day window)
+      - Current occupancy: ${currentOccupancy}% (${soldSeats}/${totalSeats} seats)
+      - Expected occupancy: ${env.expectedOccupancyToday}%
+      - Demand score: ${forecast.demandScore} (0-1 scale)
+      - Fuel cost index: ${env.fuelCostIndex} (1.0 = normal)
+      - Seasonality index: ${env.seasonalityIndex} (higher = peak season)
+      - Competition: ${JSON.stringify(env.competitors)}
+      - Event: ${env.eventImpact || "None"}
+      
+      TASK: Predict MULTIPLIERS for each pricing feature. Each multiplier adjusts the base price.
+      - Multiplier of 1.0 = no change
+      - Multiplier > 1.0 = price increase (e.g., 1.15 = +15%)
+      - Multiplier < 1.0 = price decrease (e.g., 0.90 = -10%)
+      
+      CONSTRAINT: Final combined multiplier should be between 0.80 and 1.20 (±20% max change).
+      
+      Return JSON with this EXACT structure:
+      {
+        "multipliers": {
+          "demand": { "value": 1.05, "reason": "Brief explanation" },
+          "urgency": { "value": 1.02, "reason": "Brief explanation" },
+          "competition": { "value": 0.98, "reason": "Brief explanation" },
+          "fuel": { "value": 1.03, "reason": "Brief explanation" },
+          "seasonality": { "value": 1.02, "reason": "Brief explanation" }
+        },
+        "summary": "Overall pricing strategy explanation"
+      }
     `;
 
     try {
@@ -388,16 +418,75 @@ export class DatabaseStorage implements IStorage {
         text += chunk.text || "";
       }
       const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const result = JSON.parse(jsonMatch[0]);
-        await this.logReasoning(sessionId, "Pricing Agent", "Price Update", result.reasoning);
-        
-        // Apply updates
-        for (const update of result.updates) {
-          await db.update(buckets)
-            .set({ price: update.newPrice })
-            .where(sql`${buckets.sessionId} = ${sessionId} AND ${buckets.code} = ${update.code}`);
+      if (!jsonMatch) {
+        console.error("Pricing Agent: No JSON found in response");
+        return;
+      }
+      
+      let result;
+      try {
+        result = JSON.parse(jsonMatch[0]);
+      } catch (parseError) {
+        console.error("Pricing Agent: Failed to parse JSON", parseError);
+        return;
+      }
+      
+      // Default multiplier structure with fallbacks
+      const defaultMultiplier = { value: 1.0, reason: "No adjustment" };
+      const multipliers = {
+        demand: result.multipliers?.demand || defaultMultiplier,
+        urgency: result.multipliers?.urgency || defaultMultiplier,
+        competition: result.multipliers?.competition || defaultMultiplier,
+        fuel: result.multipliers?.fuel || defaultMultiplier,
+        seasonality: result.multipliers?.seasonality || defaultMultiplier,
+      };
+      
+      // Validate multiplier values are numbers
+      for (const [key, val] of Object.entries(multipliers)) {
+        if (typeof val.value !== 'number' || isNaN(val.value)) {
+          multipliers[key as keyof typeof multipliers] = defaultMultiplier;
         }
+      }
+      
+      // Calculate combined multiplier (product of all feature multipliers)
+      const combinedMultiplier = 
+        multipliers.demand.value *
+        multipliers.urgency.value *
+        multipliers.competition.value *
+        multipliers.fuel.value *
+        multipliers.seasonality.value;
+      
+      // Clamp to ±20% max change
+      const clampedMultiplier = Math.max(0.80, Math.min(1.20, combinedMultiplier));
+      
+      // Build detailed reasoning with multiplier breakdown
+      const multiplierBreakdown = Object.entries(multipliers)
+        .map(([feature, data]) => `• ${feature.charAt(0).toUpperCase() + feature.slice(1)}: ${data.value}x - ${data.reason}`)
+        .join('\n');
+      
+      const fullReasoning = `Combined Multiplier: ${clampedMultiplier.toFixed(3)}x\n\n${multiplierBreakdown}\n\nStrategy: ${result.summary || "Optimizing prices based on current market conditions."}`;
+      
+      // Store multipliers in metadata for frontend display
+      await db.insert(reasoningLogs).values({
+        sessionId,
+        agentName: "Pricing Agent",
+        decision: `Multiplier: ${clampedMultiplier.toFixed(2)}x`,
+        reasoning: fullReasoning,
+        metadata: JSON.stringify(multipliers)
+      });
+      
+      // Apply multiplier to all buckets with class-based scaling
+      // Economy gets base multiplier, Business gets slightly higher adjustment
+      for (const bucket of currentBuckets) {
+        let bucketMultiplier = clampedMultiplier;
+        if (bucket.class === "BUSINESS") {
+          // Business class is more price-inelastic, apply slightly higher multiplier
+          bucketMultiplier = Math.min(1.25, clampedMultiplier * 1.05);
+        }
+        const newPrice = Math.round(bucket.basePrice * bucketMultiplier);
+        await db.update(buckets)
+          .set({ price: newPrice })
+          .where(eq(buckets.id, bucket.id));
       }
     } catch (e) {
       console.error("Pricing Error", e);

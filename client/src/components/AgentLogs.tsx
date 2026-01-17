@@ -3,8 +3,94 @@ import { Badge } from "@/components/ui/badge";
 import type { ReasoningLog } from "@shared/schema";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { BrainCircuit, Activity, LineChart } from "lucide-react";
+import { BrainCircuit, Activity, LineChart, TrendingUp, TrendingDown, Minus, Fuel, Calendar, Users, Clock, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+interface MultiplierData {
+  value: number;
+  reason: string;
+}
+
+interface Multipliers {
+  demand?: MultiplierData;
+  urgency?: MultiplierData;
+  competition?: MultiplierData;
+  fuel?: MultiplierData;
+  seasonality?: MultiplierData;
+}
+
+const featureIcons: Record<string, any> = {
+  demand: Users,
+  urgency: Clock,
+  competition: Zap,
+  fuel: Fuel,
+  seasonality: Calendar,
+};
+
+const featureLabels: Record<string, string> = {
+  demand: "Demand",
+  urgency: "Urgency",
+  competition: "Competition",
+  fuel: "Fuel Cost",
+  seasonality: "Seasonality",
+};
+
+function MultiplierBadge({ value }: { value: number }) {
+  const isIncrease = value > 1;
+  const isDecrease = value < 1;
+  const Icon = isIncrease ? TrendingUp : isDecrease ? TrendingDown : Minus;
+  const color = isIncrease 
+    ? "text-red-500 bg-red-500/10" 
+    : isDecrease 
+    ? "text-green-500 bg-green-500/10" 
+    : "text-slate-500 bg-slate-500/10";
+  
+  return (
+    <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-mono font-bold", color)}>
+      <Icon className="w-3 h-3" />
+      {value.toFixed(2)}x
+    </span>
+  );
+}
+
+function MultiplierBreakdown({ multipliers }: { multipliers: Multipliers }) {
+  const features = ['demand', 'urgency', 'competition', 'fuel', 'seasonality'] as const;
+  const validFeatures = features.filter(f => multipliers[f]?.value !== undefined);
+  
+  if (validFeatures.length === 0) {
+    return null;
+  }
+  
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="text-xs font-semibold text-foreground/80 mb-2">Feature Multipliers:</div>
+      <div className="grid gap-2">
+        {validFeatures.map((feature) => {
+          const data = multipliers[feature];
+          if (!data || typeof data.value !== 'number') return null;
+          
+          const Icon = featureIcons[feature] || Zap;
+          const label = featureLabels[feature] || feature;
+          
+          return (
+            <div 
+              key={feature}
+              className="flex items-start gap-2 p-2 rounded-md bg-background/50 border border-border/50"
+              data-testid={`multiplier-${feature}`}
+            >
+              <div className="flex items-center gap-2 min-w-[100px]">
+                <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium">{label}</span>
+              </div>
+              <MultiplierBadge value={data.value} />
+              <span className="text-xs text-muted-foreground flex-1">{data.reason || "No reason provided"}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 interface AgentLogsProps {
   logs: ReasoningLog[];
@@ -82,11 +168,28 @@ export function AgentLogs({ logs }: AgentLogsProps) {
                         {log.reasoning}
                       </div>
                       
-                      {log.metadata && Object.keys(log.metadata as object).length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-black/5 dark:border-white/5 font-mono text-[10px] opacity-75 overflow-x-auto">
-                          {JSON.stringify(log.metadata)}
-                        </div>
-                      )}
+                      {log.metadata && (() => {
+                        try {
+                          const meta = typeof log.metadata === 'string' 
+                            ? JSON.parse(log.metadata) 
+                            : log.metadata;
+                          
+                          if (meta.demand || meta.urgency || meta.competition || meta.fuel || meta.seasonality) {
+                            return <MultiplierBreakdown multipliers={meta as Multipliers} />;
+                          }
+                          
+                          if (Object.keys(meta).length > 0) {
+                            return (
+                              <div className="mt-2 pt-2 border-t border-black/5 dark:border-white/5 font-mono text-[10px] opacity-75 overflow-x-auto">
+                                {JSON.stringify(meta)}
+                              </div>
+                            );
+                          }
+                          return null;
+                        } catch {
+                          return null;
+                        }
+                      })()}
                     </div>
                   </div>
                 </motion.div>
