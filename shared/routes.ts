@@ -130,5 +130,25 @@ export const api = {
         }),
       },
     },
+    clear: {
+      method: 'POST' as const,
+      path: '/api/chat/clear',
+      responses: {
+        200: z.object({
+          success: z.boolean(),
+        }),
+      },
+    },
+  },
+  logs: {
+    clear: {
+      method: 'POST' as const,
+      path: '/api/logs/clear',
+      responses: {
+        200: z.object({
+          success: z.boolean(),
+        }),
+      },
+    },
   },
 };

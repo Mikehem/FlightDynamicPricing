@@ -534,6 +534,14 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(chatMessages).where(eq(chatMessages.sessionId, sessionId)).orderBy(chatMessages.timestamp);
   }
 
+  async clearLogs(sessionId: number): Promise<void> {
+    await db.delete(reasoningLogs).where(eq(reasoningLogs.sessionId, sessionId));
+  }
+
+  async clearChat(sessionId: number): Promise<void> {
+    await db.delete(chatMessages).where(eq(chatMessages.sessionId, sessionId));
+  }
+
   async bookTicket(sessionId: number, bucketCode: string, quantity: number): Promise<boolean> {
     const [bucket] = await db.select().from(buckets).where(eq(buckets.code, bucketCode)); // Should filter by session too strictly speaking, but code is unique per session usually if carefully managed. Better:
     // Actually code is NOT unique globally. Need session ID.

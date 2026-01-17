@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type SimulationState } from "@shared/routes";
+import { api } from "@shared/routes";
 
 // ============================================
 // SCENARIOS
@@ -89,6 +89,42 @@ export function useBookTicket() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.simulation.state.path] });
+    },
+  });
+}
+
+// ============================================
+// CLEAR DATA
+// ============================================
+
+export function useClearLogs() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(api.logs.clear.path, {
+        method: api.logs.clear.method,
+      });
+      if (!res.ok) throw new Error("Failed to clear logs");
+      return api.logs.clear.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.simulation.state.path] });
+    },
+  });
+}
+
+export function useClearChat() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(api.chat.clear.path, {
+        method: api.chat.clear.method,
+      });
+      if (!res.ok) throw new Error("Failed to clear chat");
+      return api.chat.clear.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.chat.history.path] });
     },
   });
 }

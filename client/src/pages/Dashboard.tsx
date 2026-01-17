@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useScenarios, useLoadScenario, useSimulationState, useOrchestrate } from "@/hooks/use-simulation";
+import { useScenarios, useLoadScenario, useSimulationState, useOrchestrate, useClearLogs, useClearChat } from "@/hooks/use-simulation";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,7 +9,7 @@ import { BookingChat } from "@/components/BookingChat";
 import { 
   Calendar, Plane, Users, TrendingUp, Play, RefreshCw, AlertCircle, 
   Fuel, Target, CloudSun, Trophy, DollarSign, Percent, Clock, Building2, ArrowUp, ArrowDown, Minus,
-  BrainCircuit, MessageSquare
+  BrainCircuit, MessageSquare, Trash2
 } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,8 @@ export default function Dashboard() {
   const { data: state, isLoading } = useSimulationState();
   const { mutate: loadScenario, isPending: isLoadingScenario } = useLoadScenario();
   const { mutate: orchestrate, isPending: isOrchestrating } = useOrchestrate();
+  const { mutate: clearLogs, isPending: isClearingLogs } = useClearLogs();
+  const { mutate: clearChat, isPending: isClearingChat } = useClearChat();
   
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>("");
 
@@ -544,10 +546,42 @@ export default function Dashboard() {
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="reasoning" className="flex-1 overflow-hidden mt-0">
-                <AgentLogs logs={state?.logs || []} />
+                <div className="flex flex-col h-full">
+                  <div className="flex justify-end mb-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => clearLogs()}
+                      disabled={isClearingLogs || !state?.logs?.length}
+                      data-testid="button-clear-logs"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Clear Logs
+                    </Button>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <AgentLogs logs={state?.logs || []} />
+                  </div>
+                </div>
               </TabsContent>
               <TabsContent value="booking" className="flex-1 overflow-hidden mt-0 pb-4">
-                <BookingChat />
+                <div className="flex flex-col h-full">
+                  <div className="flex justify-end mb-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => clearChat()}
+                      disabled={isClearingChat}
+                      data-testid="button-clear-chat"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Clear Chat
+                    </Button>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <BookingChat />
+                  </div>
+                </div>
               </TabsContent>
             </Tabs>
           </div>

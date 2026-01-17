@@ -88,6 +88,23 @@ export async function registerRoutes(
     }
   });
 
+  app.post(api.chat.clear.path, async (_req, res) => {
+    const session = await storage.getCurrentSession();
+    if (!session) return res.status(404).json({ message: "No active session" });
+    
+    await storage.clearChat(session.id);
+    res.json({ success: true });
+  });
+
+  // === LOGS ===
+  app.post(api.logs.clear.path, async (_req, res) => {
+    const session = await storage.getCurrentSession();
+    if (!session) return res.status(404).json({ message: "No active session" });
+    
+    await storage.clearLogs(session.id);
+    res.json({ success: true });
+  });
+
   // Seed initial session if needed
   const existing = await storage.getCurrentSession();
   if (!existing) {
