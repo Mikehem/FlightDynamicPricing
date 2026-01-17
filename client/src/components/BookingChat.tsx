@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, Bot, User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
 
 export function BookingChat() {
   const { data: messages = [], isLoading: isLoadingHistory } = useChatHistory();
@@ -50,6 +51,7 @@ export function BookingChat() {
                 "flex gap-3 max-w-[85%]",
                 msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
               )}
+              data-testid={`chat-message-${msg.role}-${idx}`}
             >
               <div className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
@@ -64,7 +66,13 @@ export function BookingChat() {
                   ? "bg-primary text-primary-foreground rounded-tr-none" 
                   : "bg-muted text-foreground rounded-tl-none"
               )}>
-                {msg.content}
+                {msg.role === "assistant" ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-strong:text-foreground prose-code:bg-background/50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-background/50 prose-pre:p-2 prose-table:text-xs">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  msg.content
+                )}
               </div>
             </div>
           ))}
