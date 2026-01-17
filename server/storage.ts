@@ -1,10 +1,12 @@
 import { db } from "./db";
 import { 
   sessions, buckets, reasoningLogs, pricingHistory, chatMessages, bookings,
-  type Session, type Bucket, type ReasoningLog, type ChatMessage, type ScenarioDef, type Booking
+  type Session, type Bucket, type ReasoningLog, type ChatMessage, type ScenarioDef, type Booking,
+  type OrchestrationResult
 } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
+import { OrchestratorAgent } from "./orchestrator";
 
 // Generate booking reference code
 function generateBookingReference(): string {
@@ -423,10 +425,10 @@ export interface IStorage {
   
   // Actions
   bookTicket(sessionId: number, bucketCode: string, quantity: number): Promise<boolean>;
-  logReasoning(sessionId: number, agent: string, decision: string, reasoning: string): Promise<void>;
+  logReasoning(sessionId: number, agent: string, decision: string, reasoning: string, metadata?: Record<string, unknown>): Promise<void>;
   
-  // Agent Logic
-  runOrchestration(sessionId: number): Promise<void>;
+  // Agent Logic (A2A Orchestration Pattern)
+  runOrchestration(sessionId: number): Promise<OrchestrationResult | null>;
   processChatMessage(sessionId: number, message: string): Promise<string>;
 }
 
@@ -567,293 +569,51 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  async logReasoning(sessionId: number, agent: string, decision: string, reasoning: string) {
+  async logReasoning(sessionId: number, agent: string, decision: string, reasoning: string, metadata?: Record<string, unknown>) {
     await db.insert(reasoningLogs).values({
       sessionId,
       agentName: agent,
       decision,
-      reasoning
+      reasoning,
+      metadata: metadata ? JSON.stringify(metadata) : null
     });
   }
 
-  // === AI AGENT ORCHESTRATION ===
-  async runOrchestration(sessionId: number): Promise<void> {
+  // === AI AGENT ORCHESTRATION (A2A Pattern) ===
+  async runOrchestration(sessionId: number): Promise<OrchestrationResult | null> {
     const session = await this.getCurrentSession();
-    if (!session || session.id !== sessionId) return;
+    if (!session || session.id !== sessionId) return null;
 
     const currentBuckets = await this.getBuckets(sessionId);
     const scenario = SCENARIOS.find(s => s.id === session.scenarioId);
     
-    if (!scenario) return;
+    if (!scenario) return null;
 
     const env = scenario.environment;
-    const totalSeats = 192;
-    const soldSeats = currentBuckets.reduce((sum, b) => sum + (b.sold || 0), 0);
-    const currentOccupancy = Math.round((soldSeats / totalSeats) * 100);
-    const daysLeft = env.daysToDeparture;
-    const expectedOccupancy = env.expectedOccupancyToday;
-
-    // 0. OBJECTIVE SELECTION AGENT - Determines system goal
-    const objectivePrompt = `
-      You are an Airline Pricing Objective Selection Agent.
-      Your role is to determine the optimal business objective for this flight.
-      
-      CONTEXT:
-      - Scenario: ${scenario.name}
-      - Description: ${scenario.description}
-      - Days to departure: ${daysLeft}
-      - Current occupancy: ${currentOccupancy}% (${soldSeats}/${totalSeats} seats)
-      - Expected occupancy at this point: ${expectedOccupancy}%
-      - Event impact: ${env.eventImpact || "None"}
-      - Competitor prices: ${JSON.stringify(env.competitors)}
-      
-      POSSIBLE OBJECTIVES:
-      1. REVENUE_MAXIMIZATION - Focus on maximizing ticket revenue per seat
-      2. OCCUPANCY_MAXIMIZATION - Focus on filling as many seats as possible
-      3. COMPETITIVE_MATCHING - Focus on matching or undercutting competitor prices
-      
-      DECISION GUIDELINES:
-      - If > 30 days to departure AND demand is low → OCCUPANCY_MAXIMIZATION (need to fill seats early)
-      - If < 10 days to departure AND demand is high → REVENUE_MAXIMIZATION (capitalize on urgency)
-      - If competitors are aggressively pricing AND occupancy is below target → COMPETITIVE_MATCHING
-      - If on track with targets → REVENUE_MAXIMIZATION (optimize profits)
-      - If behind on occupancy targets → OCCUPANCY_MAXIMIZATION (fill seats)
-      
-      Return JSON with this EXACT structure:
-      {
-        "objective": "REVENUE_MAXIMIZATION or OCCUPANCY_MAXIMIZATION or COMPETITIVE_MATCHING",
-        "confidence": "HIGH or MEDIUM or LOW",
-        "primaryReason": "Main reason for this choice",
-        "factors": ["factor1", "factor2", "factor3"],
-        "riskAssessment": "What could go wrong with this strategy"
-      }
-    `;
     
-    let systemObjective = { 
-      objective: "REVENUE_MAXIMIZATION", 
-      confidence: "MEDIUM",
-      primaryReason: "Default strategy",
-      factors: [],
-      riskAssessment: "Default assessment"
-    };
-    
-    try {
-      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: objectivePrompt }] }] });
-      let text = "";
-      for await (const chunk of stream) {
-        text += chunk.text || "";
+    // Create orchestrator with callback to log reasoning
+    const orchestrator = new OrchestratorAgent(
+      env,
+      currentBuckets,
+      async (agentName: string, decision: string, reasoning: string, metadata: Record<string, unknown>) => {
+        await this.logReasoning(sessionId, agentName, decision, reasoning, metadata);
       }
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        systemObjective = JSON.parse(jsonMatch[0]);
-      }
-      const confidenceLabel = systemObjective.confidence === "HIGH" ? "[HIGH]" : systemObjective.confidence === "MEDIUM" ? "[MEDIUM]" : "[LOW]";
-      await this.logReasoning(sessionId, "Objective Agent", 
-        `${confidenceLabel} ${systemObjective.objective}`,
-        `${systemObjective.primaryReason}\n\nKey Factors:\n${(systemObjective.factors || []).map((f: string) => `- ${f}`).join('\n')}\n\nRisk: ${systemObjective.riskAssessment}`
-      );
-    } catch (e) {
-      console.error("Objective Selection Error", e);
-      await this.logReasoning(sessionId, "Objective Agent", 
-        "[MEDIUM] REVENUE_MAXIMIZATION",
-        "Defaulting to revenue maximization due to analysis error."
-      );
-    }
+    );
 
-    // 1. FORECAST AGENT
-    const forecastPrompt = `
-      You are an Airline Demand Forecast Agent.
-      Scenario: ${scenario.name} (${scenario.description}).
-      Event: ${scenario.environment.eventImpact || "None"}.
-      Current Sales: ${JSON.stringify(currentBuckets.map(b => ({ code: b.code, sold: b.sold, price: b.price })))}
-      
-      Analyze demand. Return JSON: { "demandScore": number (0-1), "reasoning": "string" }
-    `;
-    
-    let forecast = { demandScore: 0.5, reasoning: "Default forecast" };
-    try {
-      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: forecastPrompt }] }] });
-      let text = "";
-      for await (const chunk of stream) {
-        text += chunk.text || "";
-      }
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) forecast = JSON.parse(jsonMatch[0]);
-      await this.logReasoning(sessionId, "Forecast Agent", `Demand Score: ${forecast.demandScore}`, forecast.reasoning);
-    } catch (e) {
-      console.error("Forecast Error", e);
-    }
+    // Run the orchestration - the orchestrator will dynamically generate a plan
+    // and execute sub-agents based on that plan
+    const result = await orchestrator.orchestrate();
 
-    // 2. PRICING AGENT - Feature-based multipliers (uses objective from Objective Agent)
-    const currentRevenue = currentBuckets.reduce((sum, b) => sum + (b.sold || 0) * b.price, 0);
-    const revenueTarget = env.revenueTarget || 2000000;
-    const occupancyTarget = env.occupancyTarget || 80;
-    const revenueProgress = (currentRevenue / revenueTarget) * 100;
-    
-    const pricingPrompt = `
-      You are a Feature-Based Dynamic Pricing Agent for airline tickets.
+    // Apply pricing changes based on orchestration result
+    const pricingResult = result.results.find(r => r.agentType === 'pricing');
+    if (pricingResult?.success) {
+      const multiplier = (pricingResult.output as { multiplier?: number })?.multiplier || 1.0;
+      const clampedMultiplier = Math.max(0.80, Math.min(1.20, multiplier));
       
-      SYSTEM OBJECTIVE (set by Objective Agent): ${systemObjective.objective}
-      Objective Rationale: ${systemObjective.primaryReason}
-      
-      CONTEXT:
-      - Scenario: ${scenario.name}
-      - Days to departure: ${daysLeft} (of 60-day window)
-      - Current occupancy: ${currentOccupancy}% (${soldSeats}/${totalSeats} seats)
-      - Expected occupancy: ${expectedOccupancy}%
-      - Target occupancy: ${occupancyTarget}%
-      - Demand score: ${forecast.demandScore} (0-1 scale)
-      - Fuel cost index: ${env.fuelCostIndex} (1.0 = normal)
-      - Seasonality index: ${env.seasonalityIndex} (higher = peak season)
-      - Competition: ${JSON.stringify(env.competitors)}
-      - Event: ${env.eventImpact || "None"}
-      
-      REVENUE METRICS:
-      - Current revenue: ₹${currentRevenue.toLocaleString()}
-      - Revenue target: ₹${revenueTarget.toLocaleString()}
-      - Revenue progress: ${revenueProgress.toFixed(1)}%
-      
-      TASK: 
-      Set MULTIPLIERS aligned with the system objective: ${systemObjective.objective}
-      - REVENUE_MAXIMIZATION: Favor higher multipliers to maximize revenue per seat
-      - OCCUPANCY_MAXIMIZATION: Favor lower multipliers to attract more bookings
-      - COMPETITIVE_MATCHING: Match competitor pricing closely
-      
-      CONSTRAINT: Final combined multiplier should be between 0.80 and 1.20 (±20% max change).
-      
-      Return JSON with this EXACT structure:
-      {
-        "alignedObjective": "${systemObjective.objective}",
-        "multipliers": {
-          "demand": { "value": 1.05, "reason": "Brief explanation" },
-          "urgency": { "value": 1.02, "reason": "Brief explanation" },
-          "competition": { "value": 0.98, "reason": "Brief explanation" },
-          "fuel": { "value": 1.03, "reason": "Brief explanation" },
-          "seasonality": { "value": 1.02, "reason": "Brief explanation" }
-        },
-        "summary": "How multipliers support the ${systemObjective.objective} objective"
-      }
-    `;
-
-    try {
-      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: pricingPrompt }] }] });
-      let text = "";
-      for await (const chunk of stream) {
-        text += chunk.text || "";
-      }
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error("Pricing Agent: No JSON found in response");
-        await this.logReasoning(sessionId, "Pricing Agent", "Parse Error", "Could not extract JSON from AI response. Using default pricing.");
-        throw new Error("No JSON found");
-      }
-      
-      let result;
-      try {
-        result = JSON.parse(jsonMatch[0]);
-      } catch (parseError) {
-        console.error("Pricing Agent: Failed to parse JSON", parseError);
-        await this.logReasoning(sessionId, "Pricing Agent", "Parse Error", "Failed to parse AI response. Using default pricing.");
-        throw parseError;
-      }
-      
-      // Default multiplier structure with fallbacks
-      const defaultMultiplier = { value: 1.0, reason: "No adjustment" };
-      const multipliers = {
-        demand: result.multipliers?.demand || defaultMultiplier,
-        urgency: result.multipliers?.urgency || defaultMultiplier,
-        competition: result.multipliers?.competition || defaultMultiplier,
-        fuel: result.multipliers?.fuel || defaultMultiplier,
-        seasonality: result.multipliers?.seasonality || defaultMultiplier,
-      };
-      
-      // Validate multiplier values are numbers
-      for (const [key, val] of Object.entries(multipliers)) {
-        if (typeof val.value !== 'number' || isNaN(val.value)) {
-          multipliers[key as keyof typeof multipliers] = defaultMultiplier;
-        }
-      }
-      
-      // Calculate combined multiplier (product of all feature multipliers)
-      const combinedMultiplier = 
-        multipliers.demand.value *
-        multipliers.urgency.value *
-        multipliers.competition.value *
-        multipliers.fuel.value *
-        multipliers.seasonality.value;
-      
-      // Clamp to ±20% max change
-      const clampedMultiplier = Math.max(0.80, Math.min(1.20, combinedMultiplier));
-      
-      // Use objective from Objective Agent (validated and passed through)
-      const objective = systemObjective.objective;
-      const objectiveReason = systemObjective.primaryReason || "Based on current market conditions";
-      
-      // Calculate projected values after price change
-      // Projected revenue = current revenue + (unsold seats * avg new price * estimated conversion rate)
-      const avgNewPrice = currentBuckets.reduce((sum, b) => sum + b.basePrice * clampedMultiplier, 0) / currentBuckets.length;
-      const unsoldSeats = totalSeats - soldSeats;
-      // Higher conversion when focusing on filling seats
-      const conversionRate = objective === "OCCUPANCY_MAXIMIZATION" ? 0.7 : objective === "COMPETITIVE_MATCHING" ? 0.6 : 0.5;
-      const projectedAdditionalRevenue = Math.round(unsoldSeats * avgNewPrice * conversionRate * 0.6);
-      const projectedRevenue = currentRevenue + projectedAdditionalRevenue;
-      
-      // Projected occupancy based on strategy
-      const projectedOccupancy = Math.min(100, Math.round(currentOccupancy + (unsoldSeats * conversionRate * 0.6 / totalSeats) * 100));
-      
-      // Build detailed reasoning with multiplier breakdown
-      const multiplierBreakdown = Object.entries(multipliers)
-        .map(([feature, data]) => `• ${feature.charAt(0).toUpperCase() + feature.slice(1)}: ${data.value}x - ${data.reason}`)
-        .join('\n');
-      
-      const objectiveLabels: Record<string, string> = {
-        "REVENUE_MAXIMIZATION": "Revenue Maximization",
-        "OCCUPANCY_MAXIMIZATION": "Occupancy Maximization", 
-        "COMPETITIVE_MATCHING": "Competitive Matching"
-      };
-      const objectiveLabel = objectiveLabels[objective] || "Revenue Maximization";
-      const fullReasoning = `Objective: ${objectiveLabel}\n${objectiveReason}\n\nCombined Multiplier: ${clampedMultiplier.toFixed(3)}x\n\n${multiplierBreakdown}\n\nApproach: ${result.summary || "Optimizing prices based on current market conditions."}`;
-      
-      // Build comprehensive metadata with objective and metrics
-      const metadata = {
-        ...multipliers,
-        optimization: {
-          objective,
-          objectiveReason,
-          metrics: {
-            revenue: {
-              current: currentRevenue,
-              projected: projectedRevenue,
-              target: revenueTarget,
-              change: projectedRevenue - currentRevenue,
-              changePercent: currentRevenue > 0 ? Math.round(((projectedRevenue - currentRevenue) / currentRevenue) * 100) : 0
-            },
-            occupancy: {
-              current: currentOccupancy,
-              projected: projectedOccupancy,
-              target: occupancyTarget,
-              change: projectedOccupancy - currentOccupancy,
-              changePercent: currentOccupancy > 0 ? Math.round(((projectedOccupancy - currentOccupancy) / currentOccupancy) * 100) : 0
-            }
-          }
-        }
-      };
-      
-      // Store multipliers in metadata for frontend display
-      await db.insert(reasoningLogs).values({
-        sessionId,
-        agentName: "Pricing Agent",
-        decision: `${objectiveLabel} | Multiplier: ${clampedMultiplier.toFixed(2)}x`,
-        reasoning: fullReasoning,
-        metadata: JSON.stringify(metadata)
-      });
-      
-      // Apply multiplier to all buckets with class-based scaling
-      // Economy gets base multiplier, Business gets slightly higher adjustment
+      // Apply multiplier to all buckets
       for (const bucket of currentBuckets) {
         let bucketMultiplier = clampedMultiplier;
         if (bucket.class === "BUSINESS") {
-          // Business class is more price-inelastic, apply slightly higher multiplier
           bucketMultiplier = Math.min(1.25, clampedMultiplier * 1.05);
         }
         const newPrice = Math.round(bucket.basePrice * bucketMultiplier);
@@ -861,109 +621,9 @@ export class DatabaseStorage implements IStorage {
           .set({ price: newPrice })
           .where(eq(buckets.id, bucket.id));
       }
-    } catch (e) {
-      console.error("Pricing Error", e);
     }
 
-    // 3. SEAT ALLOCATION AGENT - Analyzes bucket distribution and recommends reallocation
-    const seatAllocationPrompt = `
-      You are a Seat Allocation Optimization Agent for airline revenue management.
-      
-      CONTEXT:
-      - Scenario: ${scenario.name}
-      - Days to departure: ${daysLeft}
-      - Current occupancy: ${currentOccupancy}% (${soldSeats}/${totalSeats} seats)
-      - Demand score: ${forecast.demandScore}
-      
-      CURRENT BUCKET STATUS:
-      ${currentBuckets.map(b => `${b.code} (${b.class}): ${b.sold || 0}/${b.allocated} sold, ₹${b.price}`).join('\n')}
-      
-      TASK: Analyze the seat allocation across fare buckets and recommend optimization.
-      Consider:
-      1. Are lower fare buckets selling out too fast (leaving money on table)?
-      2. Are higher fare buckets empty (pricing too high)?
-      3. Should seats be reallocated between buckets?
-      4. Business vs Economy class balance
-      
-      Return JSON:
-      {
-        "analysis": "Brief analysis of current allocation",
-        "recommendation": "REALLOCATE_UP" | "REALLOCATE_DOWN" | "HOLD" | "CLOSE_BUCKET",
-        "details": "Specific recommendation with bucket names",
-        "urgency": "HIGH" | "MEDIUM" | "LOW"
-      }
-    `;
-
-    try {
-      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: seatAllocationPrompt }] }] });
-      let text = "";
-      for await (const chunk of stream) {
-        text += chunk.text || "";
-      }
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const allocation = JSON.parse(jsonMatch[0]);
-        const urgencyLabel = allocation.urgency === "HIGH" ? "[HIGH]" : allocation.urgency === "MEDIUM" ? "[MEDIUM]" : "[LOW]";
-        await this.logReasoning(sessionId, "Seat Allocation Agent", 
-          `${urgencyLabel} ${allocation.recommendation}`,
-          `${allocation.analysis}\n\n${allocation.details}`
-        );
-      }
-    } catch (e) {
-      console.error("Seat Allocation Error", e);
-    }
-
-    // 4. COMPETITOR ANALYSIS AGENT - Monitors competitor pricing and recommends response
-    const competitorPrompt = `
-      You are a Competitor Analysis Agent for airline pricing intelligence.
-      
-      CONTEXT:
-      - Our Route: ${env.route}
-      - Our Current Average Price: ₹${Math.round(currentBuckets.reduce((sum, b) => sum + b.price, 0) / currentBuckets.length)}
-      - Days to departure: ${daysLeft}
-      
-      COMPETITOR PRICING:
-      ${env.competitors.map(c => `${c.name}: ₹${c.basePrice}`).join('\n')}
-      
-      MARKET CONDITIONS:
-      - Competitor Aggressiveness: ${(env.competitorAggressiveness * 100).toFixed(0)}%
-      - Event Impact: ${env.eventImpact || "None"}
-      
-      TASK: Analyze competitor positioning and recommend our response strategy.
-      Consider:
-      1. Are we priced above or below market?
-      2. Which competitor is the biggest threat?
-      3. Should we match, undercut, or maintain premium?
-      4. Any market share opportunity?
-      
-      Return JSON:
-      {
-        "marketPosition": "PREMIUM" | "COMPETITIVE" | "BUDGET" | "UNDERCUT",
-        "biggestThreat": "Competitor name",
-        "threatLevel": "HIGH" | "MEDIUM" | "LOW",
-        "recommendation": "Specific pricing recommendation",
-        "reasoning": "Why this strategy"
-      }
-    `;
-
-    try {
-      const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: competitorPrompt }] }] });
-      let text = "";
-      for await (const chunk of stream) {
-        text += chunk.text || "";
-      }
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const competitor = JSON.parse(jsonMatch[0]);
-        const threatLabel = competitor.threatLevel === "HIGH" ? "[HIGH THREAT]" : competitor.threatLevel === "MEDIUM" ? "[MEDIUM]" : "[LOW]";
-        await this.logReasoning(sessionId, "Competitor Agent", 
-          `${threatLabel} Position: ${competitor.marketPosition} | Threat: ${competitor.biggestThreat}`,
-          `${competitor.reasoning}\n\nRecommendation: ${competitor.recommendation}`
-        );
-      }
-    } catch (e) {
-      console.error("Competitor Analysis Error", e);
-    }
+    return result;
   }
 
   async processChatMessage(sessionId: number, message: string): Promise<string> {
