@@ -26,11 +26,19 @@ Preferred communication style: Simple, everyday language.
 - **API Design**: RESTful endpoints defined in `shared/routes.ts` with Zod schema validation
 - **Development**: Vite dev server with HMR integration via middleware mode
 
-### AI/Agent System
+### AI/Agent System (Orchestrator-based A2A Architecture)
 - **LLM Provider**: Google Gemini via Replit AI Integrations (gemini-2.5-flash for speed, gemini-2.5-pro for advanced reasoning)
-- **Agent Pattern**: Multi-agent orchestration with specialized agents for forecasting, pricing, seat allocation, and business rules
+- **Agent Pattern**: Central orchestrator with A2A (Agent-to-Agent) communication protocol
+  - **OrchestratorAgent**: Analyzes environment conditions, generates dynamic execution plans, coordinates sub-agents
+  - **Sub-Agents**: Objective, Forecast, Pricing, Seat Allocation, Competitor - each callable with A2A interface
+- **A2A Protocol Types** (in `shared/schema.ts`):
+  - `SubAgentType`: Enum of available agent types
+  - `AgentTask`: Task definition with agent, priority, reason, dependencies
+  - `OrchestratorPlan`: Generated execution plan with tasks and objective
+  - `A2AMessage`: Communication trace between orchestrator and sub-agents
+  - `OrchestrationResult`: Complete result with plan, messages, and decisions
+- **Execution Flow**: Orchestrator → Plan Generation → Sub-agent Execution → Result Aggregation → Logging
 - **Batch Processing**: Custom utilities with rate limiting, retry logic, and SSE support for batch AI operations
-- **Image Generation**: Support for gemini-2.5-flash-image model
 
 ### Data Layer
 - **ORM**: Drizzle ORM with PostgreSQL dialect
