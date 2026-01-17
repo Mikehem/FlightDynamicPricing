@@ -391,30 +391,106 @@ export default function Dashboard() {
             {/* Bucket Pricing Table */}
             {state && (
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Current Bucket Pricing</CardTitle>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium">Fare Buckets</CardTitle>
+                    <div className="flex gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        Business
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-sky-500" />
+                        Economy
+                      </span>
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {state.buckets.map(bucket => (
-                      <div key={bucket.code} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border">
-                        <div>
-                          <div className="font-mono font-bold text-sm">{bucket.code}</div>
-                          <div className="text-xs text-muted-foreground">{bucket.class}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold text-primary">₹{bucket.price?.toLocaleString()}</div>
-                          <div className="flex gap-1 mt-1">
-                            <Badge variant="outline" className="text-[10px] h-4">
-                              {bucket.sold || 0} sold
-                            </Badge>
-                            <Badge variant="secondary" className="text-[10px] h-4">
-                              {bucket.allocated - (bucket.sold || 0)} left
-                            </Badge>
+                <CardContent className="pt-0">
+                  <div className="space-y-2">
+                    {state.buckets.map(bucket => {
+                      const sold = bucket.sold || 0;
+                      const available = bucket.allocated - sold;
+                      const fillRate = (sold / bucket.allocated) * 100;
+                      const priceChange = bucket.basePrice ? ((bucket.price - bucket.basePrice) / bucket.basePrice) * 100 : 0;
+                      const isBusiness = bucket.class === 'BUSINESS';
+                      
+                      return (
+                        <div 
+                          key={bucket.code} 
+                          className={`relative overflow-hidden rounded-lg border p-3 transition-all hover-elevate ${
+                            isBusiness ? 'border-amber-500/30 bg-amber-500/5' : 'border-sky-500/30 bg-sky-500/5'
+                          }`}
+                        >
+                          {/* Fill rate background */}
+                          <div 
+                            className={`absolute inset-y-0 left-0 transition-all ${
+                              isBusiness ? 'bg-amber-500/10' : 'bg-sky-500/10'
+                            }`}
+                            style={{ width: `${fillRate}%` }}
+                          />
+                          
+                          <div className="relative flex items-center gap-4">
+                            {/* Bucket code & class */}
+                            <div className="flex-shrink-0 w-20">
+                              <div className={`font-mono font-bold text-sm ${
+                                isBusiness ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'
+                              }`}>
+                                {bucket.code}
+                              </div>
+                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                {bucket.class}
+                              </div>
+                            </div>
+                            
+                            {/* Price section */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-lg font-bold">₹{bucket.price?.toLocaleString()}</span>
+                                {priceChange !== 0 && (
+                                  <span className={`text-xs font-medium ${
+                                    priceChange > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                                  }`}>
+                                    {priceChange > 0 ? '+' : ''}{priceChange.toFixed(0)}%
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">
+                                Base: ₹{bucket.basePrice?.toLocaleString()}
+                              </div>
+                            </div>
+                            
+                            {/* Availability section */}
+                            <div className="flex-shrink-0 text-right">
+                              <div className="flex items-center gap-2 justify-end">
+                                <span className="text-sm font-semibold">{sold}/{bucket.allocated}</span>
+                                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                                  fillRate >= 80 
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' 
+                                    : fillRate >= 50 
+                                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                      : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                }`}>
+                                  {available} left
+                                </span>
+                              </div>
+                              <div className="mt-1.5 w-24 h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all ${
+                                    fillRate >= 80 
+                                      ? 'bg-red-500' 
+                                      : fillRate >= 50 
+                                        ? 'bg-amber-500'
+                                        : 'bg-green-500'
+                                  }`}
+                                  style={{ width: `${fillRate}%` }}
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
