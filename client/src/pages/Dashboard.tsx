@@ -2,12 +2,14 @@ import { useEffect, useState, useMemo } from "react";
 import { useScenarios, useLoadScenario, useSimulationState, useOrchestrate } from "@/hooks/use-simulation";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SeatMap } from "@/components/SeatMap";
 import { AgentLogs } from "@/components/AgentLogs";
 import { BookingChat } from "@/components/BookingChat";
 import { 
   Calendar, Plane, Users, TrendingUp, Play, RefreshCw, AlertCircle, 
-  Fuel, Target, CloudSun, Trophy, DollarSign, Percent, Clock, Building2, ArrowUp, ArrowDown, Minus
+  Fuel, Target, CloudSun, Trophy, DollarSign, Percent, Clock, Building2, ArrowUp, ArrowDown, Minus,
+  BrainCircuit, MessageSquare
 } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -452,14 +454,26 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* RIGHT COLUMN: Intelligence & Chat */}
-          <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 h-full overflow-hidden pl-2">
-            <div className="h-1/2">
-              <AgentLogs logs={state?.logs || []} />
-            </div>
-            <div className="h-1/2 pb-4">
-              <BookingChat />
-            </div>
+          {/* RIGHT COLUMN: Intelligence & Chat with Tabs */}
+          <div className="col-span-12 lg:col-span-3 flex flex-col h-full overflow-hidden pl-2">
+            <Tabs defaultValue="reasoning" className="flex flex-col h-full">
+              <TabsList className="grid w-full grid-cols-2 mb-2">
+                <TabsTrigger value="reasoning" className="flex items-center gap-2" data-testid="tab-agent-reasoning">
+                  <BrainCircuit className="w-4 h-4" />
+                  Agent Reasoning
+                </TabsTrigger>
+                <TabsTrigger value="booking" className="flex items-center gap-2" data-testid="tab-booking-assistant">
+                  <MessageSquare className="w-4 h-4" />
+                  Booking Assistant
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="reasoning" className="flex-1 overflow-hidden mt-0">
+                <AgentLogs logs={state?.logs || []} />
+              </TabsContent>
+              <TabsContent value="booking" className="flex-1 overflow-hidden mt-0 pb-4">
+                <BookingChat />
+              </TabsContent>
+            </Tabs>
           </div>
 
         </div>
