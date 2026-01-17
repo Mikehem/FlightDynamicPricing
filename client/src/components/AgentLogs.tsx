@@ -20,8 +20,8 @@ interface MetricData {
 }
 
 interface OptimizationData {
-  strategy: "REVENUE_MAXIMIZATION" | "SEAT_FILL_RATE";
-  strategyReason: string;
+  objective: "REVENUE_MAXIMIZATION" | "OCCUPANCY_MAXIMIZATION" | "COMPETITIVE_MATCHING";
+  objectiveReason: string;
   metrics: {
     revenue: MetricData;
     occupancy: MetricData;
@@ -164,25 +164,39 @@ function MetricCard({
 }
 
 function OptimizationStrategy({ optimization }: { optimization: OptimizationData }) {
-  const isRevenue = optimization.strategy === "REVENUE_MAXIMIZATION";
-  const StrategyIcon = isRevenue ? DollarSign : Armchair;
-  const strategyLabel = isRevenue ? "Revenue Maximization" : "Seat Fill Rate";
-  const strategyColor = isRevenue 
-    ? "bg-emerald-500/10 text-emerald-600 border-emerald-300 dark:border-emerald-700"
-    : "bg-blue-500/10 text-blue-600 border-blue-300 dark:border-blue-700";
+  const objectiveConfig: Record<string, { icon: any; label: string; color: string }> = {
+    REVENUE_MAXIMIZATION: {
+      icon: DollarSign,
+      label: "Revenue Maximization",
+      color: "bg-emerald-500/10 text-emerald-600 border-emerald-300 dark:border-emerald-700"
+    },
+    OCCUPANCY_MAXIMIZATION: {
+      icon: Armchair,
+      label: "Occupancy Maximization",
+      color: "bg-blue-500/10 text-blue-600 border-blue-300 dark:border-blue-700"
+    },
+    COMPETITIVE_MATCHING: {
+      icon: Zap,
+      label: "Competitive Matching",
+      color: "bg-orange-500/10 text-orange-600 border-orange-300 dark:border-orange-700"
+    }
+  };
+  
+  const config = objectiveConfig[optimization.objective] || objectiveConfig.REVENUE_MAXIMIZATION;
+  const ObjectiveIcon = config.icon;
   
   return (
     <div className="mt-3 space-y-3">
       <div className="flex items-center gap-2">
         <Target className="w-4 h-4 text-primary" />
-        <span className="text-xs font-semibold text-foreground/80">Optimization Strategy:</span>
+        <span className="text-xs font-semibold text-foreground/80">Optimization Objective:</span>
       </div>
       
-      <div className={cn("flex items-center gap-2 p-2 rounded-lg border", strategyColor)} data-testid="optimization-strategy">
-        <StrategyIcon className="w-5 h-5" />
+      <div className={cn("flex items-center gap-2 p-2 rounded-lg border", config.color)} data-testid="optimization-strategy">
+        <ObjectiveIcon className="w-5 h-5" />
         <div className="flex-1">
-          <div className="font-bold text-sm">{strategyLabel}</div>
-          <div className="text-xs opacity-80">{optimization.strategyReason}</div>
+          <div className="font-bold text-sm">{config.label}</div>
+          <div className="text-xs opacity-80">{optimization.objectiveReason}</div>
         </div>
       </div>
       
@@ -250,6 +264,39 @@ function MultiplierBreakdown({ multipliers }: { multipliers: Multipliers }) {
       </div>
     </div>
   );
+}
+
+function MetadataDisplay({ metadata }: { metadata: unknown }) {
+  if (!metadata) return null;
+  
+  try {
+    const meta = typeof metadata === 'string' 
+      ? JSON.parse(metadata) 
+      : metadata as Record<string, unknown>;
+    
+    const hasMultipliers = meta.demand || meta.urgency || meta.competition || meta.fuel || meta.seasonality;
+    const hasOptimization = (meta.optimization as Record<string, unknown>)?.objective;
+    
+    if (hasOptimization || hasMultipliers) {
+      return (
+        <>
+          {hasOptimization && <OptimizationStrategy optimization={meta.optimization as OptimizationData} />}
+          {hasMultipliers && <MultiplierBreakdown multipliers={meta as Multipliers} />}
+        </>
+      );
+    }
+    
+    if (Object.keys(meta).length > 0) {
+      return (
+        <div className="mt-2 pt-2 border-t border-black/5 dark:border-white/5 font-mono text-[10px] opacity-75 overflow-x-auto">
+          {JSON.stringify(meta)}
+        </div>
+      );
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 interface AgentLogsProps {
@@ -328,36 +375,7 @@ export function AgentLogs({ logs }: AgentLogsProps) {
                         {log.reasoning}
                       </div>
                       
-                      {log.metadata && (() => {
-                        try {
-                          const meta = typeof log.metadata === 'string' 
-                            ? JSON.parse(log.metadata) 
-                            : log.metadata;
-                          
-                          const hasMultipliers = meta.demand || meta.urgency || meta.competition || meta.fuel || meta.seasonality;
-                          const hasOptimization = meta.optimization?.strategy;
-                          
-                          if (hasOptimization || hasMultipliers) {
-                            return (
-                              <>
-                                {hasOptimization && <OptimizationStrategy optimization={meta.optimization} />}
-                                {hasMultipliers && <MultiplierBreakdown multipliers={meta as Multipliers} />}
-                              </>
-                            );
-                          }
-                          
-                          if (Object.keys(meta).length > 0) {
-                            return (
-                              <div className="mt-2 pt-2 border-t border-black/5 dark:border-white/5 font-mono text-[10px] opacity-75 overflow-x-auto">
-                                {JSON.stringify(meta)}
-                              </div>
-                            );
-                          }
-                          return null;
-                        } catch {
-                          return null;
-                        }
-                      })()}
+                      <MetadataDisplay metadata={log.metadata} />
                     </div>
                   </div>
                 </motion.div>
