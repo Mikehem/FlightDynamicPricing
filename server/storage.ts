@@ -678,6 +678,9 @@ export class DatabaseStorage implements IStorage {
       id: b.id
     }));
     
+    // Calculate total availability
+    const totalAvailable = bucketInfo.reduce((sum, b) => sum + b.available, 0);
+    
     // Enhanced Booking Agent prompt with structured flow
     const prompt = `
       You are an Airline Booking Assistant for Indigo flight BLR-DXB (Bangalore to Dubai).
@@ -686,9 +689,15 @@ export class DatabaseStorage implements IStorage {
       - Route: BLR → DXB (Bangalore to Dubai)
       - Airline: Indigo
       - Departure: ${session.departureDate ? new Date(session.departureDate).toLocaleDateString() : 'TBD'}
+      - Total seats available: ${totalAvailable}
       
-      AVAILABLE SEATS & PRICING:
-      ${bucketInfo.map(b => `${b.code} (${b.class}): ₹${b.price?.toLocaleString()} - ${b.available} seats available`).join('\n')}
+      AVAILABLE SEATS & PRICING (Dynamic Pricing - prices may change based on demand):
+      ${bucketInfo.map(b => `${b.code} (${b.class}): ₹${b.price?.toLocaleString()} per seat - ${b.available} seats available`).join('\n')}
+      
+      PRICING NOTES:
+      - All prices shown are per passenger
+      - For group bookings (2+ passengers), show total fare calculation
+      - Prices are dynamic and may increase after each booking due to demand
       
       CONVERSATION HISTORY:
       ${recentHistory}
@@ -698,17 +707,22 @@ export class DatabaseStorage implements IStorage {
       INSTRUCTIONS:
       1. If user wants to BOOK a flight, guide them through:
          - Ask for class preference (Economy or Business) if not specified
-         - Ask for number of passengers (1-4) if not specified
+         - Ask for number of passengers (1-10) if not specified
+         - For multiple passengers, clearly show: "₹X per seat × Y passengers = ₹Z total"
+         - Recommend suitable bucket based on availability
          - Show price summary and ask for confirmation
          - If user CONFIRMS (says yes, confirm, book it, proceed, etc.), respond with EXACTLY this JSON format:
-           {"action": "COMPLETE_BOOKING", "bucketCode": "ECO_1", "passengers": 1, "passengerName": "Guest"}
+           {"action": "COMPLETE_BOOKING", "bucketCode": "ECO_1", "passengers": 2, "passengerName": "Guest"}
       
       2. If user is asking questions about pricing, availability, or flight details, answer helpfully.
+         - Explain that prices are dynamic and may change based on demand
+         - For group inquiries, always calculate and show total fare
       
-      3. Be concise, friendly, and professional. Use ₹ for prices.
+      3. Be concise, friendly, and professional. Use ₹ for prices. Format prices with commas (e.g., ₹14,400).
       
       4. IMPORTANT: When user confirms a booking, you MUST respond with the JSON action format above.
          Look for confirmation words like: yes, confirm, book, proceed, go ahead, do it, okay, sure
+         The "passengers" field MUST match the number of tickets the user requested.
       
       Respond naturally but include the JSON action when booking is confirmed.
     `;
