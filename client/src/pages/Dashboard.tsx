@@ -115,7 +115,7 @@ export default function Dashboard() {
       </header>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-hidden min-h-0">
         <ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-64px)]">
           
           {/* LEFT PANEL: Environment Control */}
@@ -571,8 +571,8 @@ export default function Dashboard() {
                   Booking Assistant
                 </TabsTrigger>
               </TabsList>
-              <TabsContent value="reasoning" className="flex-1 overflow-hidden mt-0">
-                <div className="flex flex-col h-full">
+              <TabsContent value="reasoning" className="flex-1 min-h-0 overflow-hidden mt-0">
+                <div className="flex flex-col h-full min-h-0">
                   <div className="flex justify-end mb-2">
                     <Button 
                       variant="outline" 
@@ -590,8 +590,8 @@ export default function Dashboard() {
                   </div>
                 </div>
               </TabsContent>
-              <TabsContent value="booking" className="flex-1 overflow-hidden mt-0 pb-4">
-                <div className="flex flex-col h-full">
+              <TabsContent value="booking" className="flex-1 min-h-0 overflow-hidden mt-0 pb-4">
+                <div className="flex flex-col h-full min-h-0">
                   <div className="flex justify-end mb-2">
                     <Button 
                       variant="outline" 
