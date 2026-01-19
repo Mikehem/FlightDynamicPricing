@@ -29,15 +29,16 @@ export function BookingChat() {
 
   return (
     <div className="flex flex-col h-full bg-card rounded-xl border shadow-sm overflow-hidden">
-      <div className="p-4 border-b bg-muted/30">
+      <div className="p-4 border-b bg-muted/30 flex-shrink-0">
         <h3 className="font-display font-semibold text-lg flex items-center gap-2">
           <Bot className="w-5 h-5 text-primary" />
           Booking Assistant
         </h3>
       </div>
 
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="p-4 space-y-4">
           {isLoadingHistory && (
             <div className="flex justify-center p-4">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -91,10 +92,11 @@ export function BookingChat() {
           )}
           
           <div ref={scrollRef} />
-        </div>
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      </div>
 
-      <div className="p-4 border-t bg-muted/10">
+      <div className="p-4 border-t bg-muted/10 flex-shrink-0">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             value={input}
@@ -102,6 +104,7 @@ export function BookingChat() {
             placeholder="Book a flight to Dubai..."
             className="flex-1 bg-background"
             disabled={isPending}
+            data-testid="input-chat"
           />
           <Button type="submit" size="icon" disabled={isPending || !input.trim()}>
             {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

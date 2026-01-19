@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import type { DemandForecastPoint } from "@shared/schema";
 
@@ -114,11 +115,12 @@ export default function Dashboard() {
       </header>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 p-4 lg:p-6 overflow-hidden">
-        <div className="grid grid-cols-12 gap-4 h-[calc(100vh-100px)]">
+      <main className="flex-1 overflow-hidden">
+        <ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-64px)]">
           
-          {/* LEFT COLUMN: Environment Panel */}
-          <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 overflow-hidden">
+          {/* LEFT PANEL: Environment Control */}
+          <ResizablePanel defaultSize={22} minSize={15} maxSize={35}>
+            <div className="flex h-full flex-col p-4 overflow-hidden">
             <Card className="flex-1 flex flex-col overflow-hidden">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -242,10 +244,16 @@ export default function Dashboard() {
                 </ScrollArea>
               </CardContent>
             </Card>
-          </div>
+            </div>
+          </ResizablePanel>
 
-          {/* MIDDLE COLUMN: Visualization */}
-          <div className="col-span-12 lg:col-span-6 flex flex-col gap-4 overflow-y-auto px-2">
+          <ResizableHandle withHandle />
+
+          {/* MIDDLE PANEL: Visualization */}
+          <ResizablePanel defaultSize={50} minSize={30}>
+            <div className="flex h-full flex-col overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="flex flex-col gap-4 p-4">
             {/* Live Stats Bar */}
             {state && (
               <div className="grid grid-cols-4 gap-3">
@@ -542,10 +550,16 @@ export default function Dashboard() {
                 </div>
               </Card>
             )}
-          </div>
+              </div>
+            </ScrollArea>
+            </div>
+          </ResizablePanel>
 
-          {/* RIGHT COLUMN: Intelligence & Chat with Tabs */}
-          <div className="col-span-12 lg:col-span-3 flex flex-col h-full overflow-hidden pl-2">
+          <ResizableHandle withHandle />
+
+          {/* RIGHT PANEL: Intelligence & Chat with Tabs */}
+          <ResizablePanel defaultSize={28} minSize={20} maxSize={45}>
+            <div className="h-full flex flex-col p-4 overflow-hidden">
             <Tabs defaultValue="reasoning" className="flex flex-col h-full">
               <TabsList className="grid w-full grid-cols-2 mb-2">
                 <TabsTrigger value="reasoning" className="flex items-center gap-2" data-testid="tab-agent-reasoning">
@@ -596,9 +610,10 @@ export default function Dashboard() {
                 </div>
               </TabsContent>
             </Tabs>
-          </div>
+            </div>
+          </ResizablePanel>
 
-        </div>
+        </ResizablePanelGroup>
       </main>
     </div>
   );
