@@ -7,6 +7,7 @@ import {
 import { eq, desc, sql } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import { OrchestratorAgent, type BookingContext } from "./orchestrator";
+import { logger } from "./logger";
 
 // Generate booking reference code
 function generateBookingReference(): string {
@@ -581,13 +582,22 @@ export class DatabaseStorage implements IStorage {
 
   // === AI AGENT ORCHESTRATION (A2A Pattern) ===
   async runOrchestration(sessionId: number, bookingContext?: BookingContext): Promise<OrchestrationResult | null> {
+    logger.orchestration('START', `Running orchestration for session ${sessionId}`, 
+      bookingContext ? { bookingContext } : undefined);
+    
     const session = await this.getCurrentSession();
-    if (!session || session.id !== sessionId) return null;
+    if (!session || session.id !== sessionId) {
+      logger.warn('Storage', `Orchestration failed: session ${sessionId} not found`);
+      return null;
+    }
 
     const currentBuckets = await this.getBuckets(sessionId);
     const scenario = SCENARIOS.find(s => s.id === session.scenarioId);
     
-    if (!scenario) return null;
+    if (!scenario) {
+      logger.warn('Storage', `Orchestration failed: scenario not found for session ${sessionId}`);
+      return null;
+    }
 
     const env = scenario.environment;
     
@@ -603,7 +613,9 @@ export class DatabaseStorage implements IStorage {
 
     // Run the orchestration - the orchestrator will dynamically generate a plan
     // and execute sub-agents based on that plan
+    logger.orchestration('EXECUTE', 'Starting orchestrator.orchestrate()');
     const result = await orchestrator.orchestrate();
+    logger.orchestration('COMPLETE', `Orchestration completed with ${result.results.length} agent results`);
 
     // Apply pricing changes based on orchestration result
     const pricingResult = result.results.find(r => r.agentType === 'pricing');
@@ -723,6 +735,7 @@ export class DatabaseStorage implements IStorage {
     // Run orchestration with booking context for seat reallocation optimization
     try {
       if (bookingContext) {
+        logger.info('Storage', `Group booking detected: ${detectedPassengers} passengers for ${preferredClass || 'Economy'}`);
         await this.logReasoning(sessionId, "Booking Agent", 
           `Group booking request detected: ${detectedPassengers} passengers`,
           `Running seat allocation optimization for ${preferredClass || 'Economy'} class group booking`
@@ -730,7 +743,7 @@ export class DatabaseStorage implements IStorage {
       }
       await this.runOrchestration(sessionId, bookingContext);
     } catch (e) {
-      console.error("Orchestration error during chat:", e);
+      logger.error('Storage', 'Orchestration error during chat processing', e);
       // Continue with existing prices if orchestration fails
     }
     
@@ -814,12 +827,14 @@ export class DatabaseStorage implements IStorage {
 
     let responseText = "I'm having trouble connecting to the reservation system. Please try again.";
     try {
+      logger.debug('Storage', 'Starting chat AI generation');
       const stream = await ai.models.generateContentStream({ model, contents: [{ role: "user", parts: [{ text: prompt }] }] });
       let text = "";
       for await (const chunk of stream) {
         text += chunk.text || "";
       }
       responseText = text;
+      logger.debug('Storage', `Chat AI response generated: ${responseText.length} chars`);
       
       // Check if response contains booking action
       const actionMatch = responseText.match(/\{"action"\s*:\s*"COMPLETE_BOOKING"[^}]+\}/);
