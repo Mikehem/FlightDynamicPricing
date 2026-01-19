@@ -86,9 +86,9 @@ export default function Dashboard() {
   const loadFactor = ((totalSold / totalSeats) * 100).toFixed(1);
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
+    <div className="h-screen bg-background text-foreground flex flex-col font-sans overflow-hidden">
       {/* HEADER */}
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b bg-card/50 backdrop-blur-sm z-50 flex-shrink-0">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-primary/10 p-2 rounded-lg">
@@ -116,7 +116,7 @@ export default function Dashboard() {
 
       {/* MAIN CONTENT */}
       <main className="flex-1 overflow-hidden min-h-0">
-        <ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-64px)]">
+        <ResizablePanelGroup direction="horizontal" className="h-full">
           
           {/* LEFT PANEL: Environment Control */}
           <ResizablePanel defaultSize={22} minSize={15} maxSize={35}>
@@ -129,7 +129,7 @@ export default function Dashboard() {
                 </CardTitle>
                 <CardDescription>Select and load a pricing scenario</CardDescription>
               </CardHeader>
-              <CardContent className="flex-1 flex flex-col overflow-hidden">
+              <CardContent className="flex-1 min-h-0 flex flex-col overflow-hidden">
                 {/* Scenario Selector */}
                 <div className="space-y-3 mb-4">
                   <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
