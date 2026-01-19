@@ -406,15 +406,16 @@ export function AgentLogs({ logs }: AgentLogsProps) {
 
   return (
     <div className="flex flex-col h-full bg-card rounded-xl border shadow-sm overflow-hidden">
-      <div className="p-4 border-b bg-muted/30">
+      <div className="p-4 border-b bg-muted/30 flex-shrink-0">
         <h3 className="font-display font-semibold text-lg flex items-center gap-2">
           <BrainCircuit className="w-5 h-5 text-primary" />
           Agent Reasoning Trace
         </h3>
       </div>
       
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="p-4 space-y-4">
           <AnimatePresence initial={false}>
             {sortedLogs.length === 0 ? (
               <div className="text-center text-muted-foreground py-10 italic">
@@ -461,8 +462,9 @@ export function AgentLogs({ logs }: AgentLogsProps) {
               ))
             )}
           </AnimatePresence>
-        </div>
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 }
