@@ -9,7 +9,7 @@ import { BookingChat } from "@/components/BookingChat";
 import { 
   Calendar, Plane, Users, TrendingUp, Play, RefreshCw, AlertCircle, 
   Fuel, Target, CloudSun, Trophy, DollarSign, Percent, Clock, Building2, ArrowUp, ArrowDown, Minus,
-  BrainCircuit, MessageSquare, Trash2
+  BrainCircuit, MessageSquare, Trash2, HeartPulse, ShieldAlert
 } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -229,6 +229,30 @@ export default function Dashboard() {
                           <EnvRow label="Event Impact" value={selectedScenario.environment.eventImpact} icon={<Trophy className="w-3 h-3" />} highlight />
                         )}
                         <EnvRow label="Weather" value={selectedScenario.environment.weatherForecast} icon={<CloudSun className="w-3 h-3" />} />
+                      </div>
+
+                      <Separator />
+
+                      {/* Customer Sentiment */}
+                      <div className="space-y-1">
+                        <h5 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1">
+                          <HeartPulse className="w-3 h-3" />
+                          Customer Sentiment
+                        </h5>
+                        <EnvRow label="Travel Purpose" value={selectedScenario.environment.customerSentiment.travelPurpose} />
+                        <EnvRow label="Price Awareness" value={selectedScenario.environment.customerSentiment.priceAwareness} highlight={selectedScenario.environment.customerSentiment.priceAwareness === 'HIGH'} />
+                        <EnvRow label="Booking Urgency" value={selectedScenario.environment.customerSentiment.bookingUrgency} highlight={selectedScenario.environment.customerSentiment.bookingUrgency === 'HIGH'} />
+                        <EnvRow label="Brand Loyalty" value={selectedScenario.environment.customerSentiment.brandLoyalty} />
+                        <EnvRow label="Group Travel" value={`${(selectedScenario.environment.customerSentiment.groupTravelLikelihood * 100).toFixed(0)}%`} icon={<Users className="w-3 h-3" />} />
+                        <EnvRow label="Cancellation Risk" value={`${(selectedScenario.environment.customerSentiment.cancellationRisk * 100).toFixed(0)}%`} icon={<ShieldAlert className="w-3 h-3" />} highlight={selectedScenario.environment.customerSentiment.cancellationRisk > 0.3} />
+                        <div className="pt-1">
+                          <p className="text-xs text-muted-foreground italic">{selectedScenario.environment.customerSentiment.travellerProfile}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {selectedScenario.environment.customerSentiment.sentimentDrivers.map((driver: string, i: number) => (
+                            <Badge key={i} variant="secondary" className="text-[10px]" data-testid={`badge-sentiment-driver-${i}`}>{driver}</Badge>
+                          ))}
+                        </div>
                       </div>
 
                       <Separator />

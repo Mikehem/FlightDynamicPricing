@@ -96,6 +96,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: "IPL Final Match - High Demand",
       weatherForecast: "Clear skies, 34°C in Dubai",
+      customerSentiment: {
+        travelPurpose: "Cricket event attendance and tourism",
+        priceAwareness: 'LOW',
+        bookingUrgency: 'HIGH',
+        brandLoyalty: 'LOW',
+        groupTravelLikelihood: 0.7,
+        cancellationRisk: 0.1,
+        sentimentDrivers: ["IPL Final excitement", "Limited seat availability", "Group travel plans", "FOMO effect"],
+        travellerProfile: "Cricket enthusiasts traveling in groups, price-insensitive due to event urgency"
+      },
       revenueTarget: 2850000,
       occupancyTarget: 95
     }
@@ -127,6 +137,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: "Fuel Price Surge (+40%)",
       weatherForecast: "Partly cloudy, 28°C",
+      customerSentiment: {
+        travelPurpose: "Mixed business and leisure",
+        priceAwareness: 'HIGH',
+        bookingUrgency: 'LOW',
+        brandLoyalty: 'MEDIUM',
+        groupTravelLikelihood: 0.2,
+        cancellationRisk: 0.35,
+        sentimentDrivers: ["Fuel surcharge anxiety", "Economic uncertainty", "Wait-and-watch attitude", "Price comparison shopping"],
+        travellerProfile: "Cautious travelers monitoring price trends, delaying non-essential trips"
+      },
       revenueTarget: 2200000,
       occupancyTarget: 75
     }
@@ -158,6 +178,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: null,
       weatherForecast: "Sunny, 32°C",
+      customerSentiment: {
+        travelPurpose: "Budget leisure and flexible business",
+        priceAwareness: 'HIGH',
+        bookingUrgency: 'LOW',
+        brandLoyalty: 'LOW',
+        groupTravelLikelihood: 0.15,
+        cancellationRisk: 0.25,
+        sentimentDrivers: ["Discount seeking behavior", "Flexible travel dates", "Competitor price comparison", "Low urgency"],
+        travellerProfile: "Price-sensitive leisure travelers with flexible schedules looking for deals"
+      },
       revenueTarget: 1500000,
       occupancyTarget: 65
     }
@@ -189,6 +219,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: "Corporate Conference in Dubai",
       weatherForecast: "Clear, 30°C",
+      customerSentiment: {
+        travelPurpose: "Urgent business and emergency travel",
+        priceAwareness: 'LOW',
+        bookingUrgency: 'HIGH',
+        brandLoyalty: 'LOW',
+        groupTravelLikelihood: 0.3,
+        cancellationRisk: 0.05,
+        sentimentDrivers: ["Travel urgency", "Corporate expense accounts", "No alternatives available", "Conference deadlines"],
+        travellerProfile: "Business travelers and urgent travelers who must fly regardless of price"
+      },
       revenueTarget: 2400000,
       occupancyTarget: 88
     }
@@ -221,6 +261,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: "IPL CANCELLED - Mass Cancellations Expected",
       weatherForecast: "Clear, 32°C",
+      customerSentiment: {
+        travelPurpose: "Cancelled event - only residual travel",
+        priceAwareness: 'HIGH',
+        bookingUrgency: 'LOW',
+        brandLoyalty: 'LOW',
+        groupTravelLikelihood: 0.05,
+        cancellationRisk: 0.8,
+        sentimentDrivers: ["Event cancellation frustration", "Refund-seeking behavior", "Lost travel purpose", "Negative word-of-mouth"],
+        travellerProfile: "Disappointed fans actively seeking cancellations and refunds"
+      },
       revenueTarget: 1200000,
       occupancyTarget: 55
     }
@@ -252,6 +302,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: null,
       weatherForecast: "Partly cloudy, 30°C",
+      customerSentiment: {
+        travelPurpose: "Opportunistic leisure and last-minute business",
+        priceAwareness: 'MEDIUM',
+        bookingUrgency: 'MEDIUM',
+        brandLoyalty: 'MEDIUM',
+        groupTravelLikelihood: 0.1,
+        cancellationRisk: 0.15,
+        sentimentDrivers: ["Last-minute deal hunting", "Impulsive travel decisions", "Limited alternatives", "Price drop expectations"],
+        travellerProfile: "Mix of spontaneous leisure travelers and last-minute business travelers"
+      },
       revenueTarget: 1600000,
       occupancyTarget: 70
     }
@@ -283,6 +343,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: "WEATHER ALERT: Severe Sandstorm Warning for Dubai",
       weatherForecast: "⚠️ Sandstorm warning, visibility may be low",
+      customerSentiment: {
+        travelPurpose: "Essential travel only",
+        priceAwareness: 'MEDIUM',
+        bookingUrgency: 'LOW',
+        brandLoyalty: 'HIGH',
+        groupTravelLikelihood: 0.05,
+        cancellationRisk: 0.6,
+        sentimentDrivers: ["Safety concerns dominating", "Travel advisory warnings", "Insurance and refund policies", "Fear of flight disruption"],
+        travellerProfile: "Risk-averse travelers, only essential travel proceeding, many postponing"
+      },
       revenueTarget: 1400000,
       occupancyTarget: 55
     }
@@ -314,6 +384,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: "COMPETITOR ALERT: Akasa Flash Sale -40%",
       weatherForecast: "Clear, 28°C",
+      customerSentiment: {
+        travelPurpose: "Leisure and price-driven travel",
+        priceAwareness: 'HIGH',
+        bookingUrgency: 'MEDIUM',
+        brandLoyalty: 'LOW',
+        groupTravelLikelihood: 0.35,
+        cancellationRisk: 0.3,
+        sentimentDrivers: ["Flash sale excitement", "Price comparison frenzy", "Fear of missing out on deals", "Brand switching for savings"],
+        travellerProfile: "Deal-hunters actively comparing across airlines, ready to switch for savings"
+      },
       revenueTarget: 1800000,
       occupancyTarget: 72
     }
@@ -345,6 +425,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: "Dubai Tech Expo - High Business Travel Demand",
       weatherForecast: "Sunny, 35°C",
+      customerSentiment: {
+        travelPurpose: "Business conference and tech expo attendance",
+        priceAwareness: 'LOW',
+        bookingUrgency: 'HIGH',
+        brandLoyalty: 'MEDIUM',
+        groupTravelLikelihood: 0.4,
+        cancellationRisk: 0.08,
+        sentimentDrivers: ["Corporate travel budgets", "Networking opportunities", "Premium seat preference", "Schedule inflexibility"],
+        travellerProfile: "Business professionals attending tech expo, company-funded, prefer premium seats"
+      },
       revenueTarget: 2600000,
       occupancyTarget: 90
     }
@@ -376,6 +466,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: "Ramadan Season - Religious Travel Peak",
       weatherForecast: "Hot, 38°C",
+      customerSentiment: {
+        travelPurpose: "Religious observance and family visits",
+        priceAwareness: 'MEDIUM',
+        bookingUrgency: 'MEDIUM',
+        brandLoyalty: 'MEDIUM',
+        groupTravelLikelihood: 0.5,
+        cancellationRisk: 0.1,
+        sentimentDrivers: ["Religious significance", "Family reunion planning", "Annual tradition", "Specific date requirements"],
+        travellerProfile: "Families and individuals traveling for Ramadan observance, planned well in advance"
+      },
       revenueTarget: 1900000,
       occupancyTarget: 70
     }
@@ -407,6 +507,16 @@ const SCENARIOS: ScenarioDef[] = [
       ],
       eventImpact: "Oil Price Crash -30%: Cost Advantage",
       weatherForecast: "Clear, 30°C",
+      customerSentiment: {
+        travelPurpose: "Leisure and opportunistic business",
+        priceAwareness: 'MEDIUM',
+        bookingUrgency: 'LOW',
+        brandLoyalty: 'MEDIUM',
+        groupTravelLikelihood: 0.25,
+        cancellationRisk: 0.15,
+        sentimentDrivers: ["Expecting cheaper fares", "Increased travel appetite", "Price drop anticipation", "Competitor price monitoring"],
+        travellerProfile: "Travelers aware of oil crash, expecting airlines to reduce fares, willing to book if prices drop"
+      },
       revenueTarget: 2000000,
       occupancyTarget: 78
     }

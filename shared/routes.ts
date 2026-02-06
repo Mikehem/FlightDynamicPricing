@@ -19,6 +19,17 @@ const demandForecastPointSchema = z.object({
   expectedOccupancy: z.number(),
 });
 
+const customerSentimentSchema = z.object({
+  travelPurpose: z.string(),
+  priceAwareness: z.enum(['HIGH', 'MEDIUM', 'LOW']),
+  bookingUrgency: z.enum(['HIGH', 'MEDIUM', 'LOW']),
+  brandLoyalty: z.enum(['HIGH', 'MEDIUM', 'LOW']),
+  groupTravelLikelihood: z.number(),
+  cancellationRisk: z.number(),
+  sentimentDrivers: z.array(z.string()),
+  travellerProfile: z.string(),
+});
+
 const scenarioEnvironmentSchema = z.object({
   route: z.string(),
   airline: z.string(),
@@ -38,6 +49,7 @@ const scenarioEnvironmentSchema = z.object({
   competitors: z.array(z.object({ name: z.string(), basePrice: z.number() })),
   eventImpact: z.string().nullable(),
   weatherForecast: z.string(),
+  customerSentiment: customerSentimentSchema,
   revenueTarget: z.number(),
   occupancyTarget: z.number(),
 });

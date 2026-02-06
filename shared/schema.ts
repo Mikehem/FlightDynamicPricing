@@ -153,6 +153,18 @@ export interface ScenarioEnvironment {
   eventImpact: string | null;
   weatherForecast: string;
   
+  // Customer Sentiment Context
+  customerSentiment: {
+    travelPurpose: string;        // Primary travel purpose for this scenario
+    priceAwareness: 'HIGH' | 'MEDIUM' | 'LOW';  // How price-sensitive travelers are
+    bookingUrgency: 'HIGH' | 'MEDIUM' | 'LOW';  // How urgently travelers need to book
+    brandLoyalty: 'HIGH' | 'MEDIUM' | 'LOW';     // How loyal travelers are to the airline
+    groupTravelLikelihood: number; // 0-1, likelihood of group bookings
+    cancellationRisk: number;     // 0-1, risk of cancellations
+    sentimentDrivers: string[];   // Key factors driving sentiment
+    travellerProfile: string;     // Description of typical traveler
+  };
+  
   // Revenue Goals
   revenueTarget: number;
   occupancyTarget: number; // percentage

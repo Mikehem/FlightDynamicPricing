@@ -646,6 +646,16 @@ CURRENT MARKET CONDITIONS:
 - Event Impact: ${this.environment.eventImpact || 'None'}
 - Competitor Aggressiveness: ${this.environment.competitorAggressiveness}
 
+SCENARIO CUSTOMER SENTIMENT CONTEXT:
+- Travel Purpose: ${this.environment.customerSentiment.travelPurpose}
+- Price Awareness: ${this.environment.customerSentiment.priceAwareness}
+- Booking Urgency: ${this.environment.customerSentiment.bookingUrgency}
+- Brand Loyalty: ${this.environment.customerSentiment.brandLoyalty}
+- Group Travel Likelihood: ${(this.environment.customerSentiment.groupTravelLikelihood * 100).toFixed(0)}%
+- Cancellation Risk: ${(this.environment.customerSentiment.cancellationRisk * 100).toFixed(0)}%
+- Traveller Profile: ${this.environment.customerSentiment.travellerProfile}
+- Key Sentiment Drivers: ${this.environment.customerSentiment.sentimentDrivers.join(', ')}
+
 CURRENT PRICING:
 - Average Economy Price: ₹${avgEconomyPrice.toLocaleString()}
 - Average Business Price: ₹${avgBusinessPrice.toLocaleString()}
@@ -657,12 +667,13 @@ ${this.environment.competitors.map(c => `${c.name}: Base ₹${c.basePrice}`).joi
 ${forecastResult ? `DEMAND FORECAST: ${forecastResult.decision} - ${forecastResult.reasoning}` : ''}
 ${competitorResult ? `COMPETITOR ANALYSIS: ${competitorResult.decision}` : ''}
 
-Analyze customer sentiment and predict willingness to buy. Consider:
-1. Price sensitivity - Are current prices reasonable for the route and timing?
-2. Urgency perception - How does proximity to departure affect buying behavior?
-3. Value perception - How do customers perceive value vs competitors?
-4. Segment behavior - Different willingness for economy vs business travelers
-5. External factors - Events, seasonality, and market conditions
+Using the scenario sentiment context above as ground truth about traveler behavior, predict willingness to buy. Consider:
+1. Price sensitivity - Given the traveller profile, are current prices acceptable?
+2. Urgency perception - How does booking urgency and departure proximity affect buying behavior?
+3. Value perception - How do customers perceive value vs competitors given their price awareness level?
+4. Segment behavior - Different willingness for economy vs business based on travel purpose
+5. External factors - Events, seasonality, cancellation risk, and group travel patterns
+6. Sentiment drivers - How the specific sentiment drivers listed above influence purchase decisions
 
 RESPOND WITH JSON:
 {
