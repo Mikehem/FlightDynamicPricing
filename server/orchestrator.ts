@@ -110,6 +110,7 @@ AVAILABLE SUB-AGENTS:
 3. pricing - Calculates price multipliers based on objectives and forecasts
 4. seat_allocation - Manages seat bucket allocation and rebalancing
 5. competitor - Monitors competitor pricing and market position
+6. sentiment - Predicts customer willingness to buy based on pricing, demand signals, and market context
 
 RESPOND WITH JSON ONLY:
 {
@@ -119,7 +120,7 @@ RESPOND WITH JSON ONLY:
   "estimatedImpact": "Expected outcome of executing this plan",
   "tasks": [
     {
-      "agentType": "objective|forecast|pricing|seat_allocation|competitor",
+      "agentType": "objective|forecast|pricing|seat_allocation|competitor|sentiment",
       "priority": 1,
       "reason": "Why this agent is needed",
       "dependsOn": [],
@@ -131,9 +132,11 @@ RESPOND WITH JSON ONLY:
 PLANNING RULES:
 - Always include objective agent first (priority 1) to set the strategy
 - Forecast agent should run after objective (priority 2)
-- Pricing agent depends on objective and forecast (priority 3)
+- Sentiment agent analyzes customer willingness to buy - can run after forecast (priority 2-3)
+- Pricing agent depends on objective, forecast, and sentiment insights (priority 3-4)
 - Seat allocation may run in parallel with pricing or after
 - Competitor analysis can run in parallel with forecast
+- Always include sentiment agent to understand purchase willingness before pricing
 - Adapt the plan based on urgency (days to departure) and situation`;
 
     try {
@@ -177,8 +180,9 @@ PLANNING RULES:
         { agentType: 'objective', priority: 1, reason: "Set pricing strategy", dependsOn: [], inputContext: ["environment"] },
         { agentType: 'forecast', priority: 2, reason: "Analyze demand", dependsOn: ['objective'], inputContext: ["environment", "objective"] },
         { agentType: 'competitor', priority: 2, reason: "Check competition", dependsOn: [], inputContext: ["environment"] },
-        { agentType: 'pricing', priority: 3, reason: "Calculate prices", dependsOn: ['objective', 'forecast'], inputContext: ["objective", "forecast"] },
-        { agentType: 'seat_allocation', priority: 4, reason: "Adjust allocation", dependsOn: ['pricing'], inputContext: ["pricing", "buckets"] }
+        { agentType: 'sentiment', priority: 3, reason: "Predict customer willingness to buy", dependsOn: ['forecast'], inputContext: ["environment", "forecast", "buckets"] },
+        { agentType: 'pricing', priority: 4, reason: "Calculate prices", dependsOn: ['objective', 'forecast', 'sentiment'], inputContext: ["objective", "forecast", "sentiment"] },
+        { agentType: 'seat_allocation', priority: 5, reason: "Adjust allocation", dependsOn: ['pricing'], inputContext: ["pricing", "buckets"] }
       ]
     };
   }
@@ -207,6 +211,9 @@ PLANNING RULES:
         break;
       case 'competitor':
         result = await this.runCompetitorAgent(task);
+        break;
+      case 'sentiment':
+        result = await this.runSentimentAgent(task);
         break;
       default:
         result = {
@@ -275,7 +282,8 @@ PLANNING RULES:
       'forecast': 'Forecast Agent',
       'pricing': 'Pricing Agent',
       'seat_allocation': 'Seat Allocation Agent',
-      'competitor': 'Competitor Agent'
+      'competitor': 'Competitor Agent',
+      'sentiment': 'Customer Sentiment Agent'
     };
     return names[agentType] || agentType;
   }
@@ -611,9 +619,120 @@ RESPOND WITH JSON:
     }
   }
 
+  private async runSentimentAgent(task: AgentTask): Promise<SubAgentResult> {
+    const currentOccupancy = this.buckets.reduce((sum, b) => sum + (b.sold || 0), 0) / 
+                             this.buckets.reduce((sum, b) => sum + b.allocated, 0);
+    
+    const forecastResult = this.subAgentResults.get('forecast');
+    const competitorResult = this.subAgentResults.get('competitor');
+    
+    const avgEconomyPrice = this.buckets
+      .filter(b => b.class === 'ECONOMY')
+      .reduce((sum, b) => sum + (b.price || b.basePrice), 0) / 
+      this.buckets.filter(b => b.class === 'ECONOMY').length;
+    
+    const avgBusinessPrice = this.buckets
+      .filter(b => b.class === 'BUSINESS')
+      .reduce((sum, b) => sum + (b.price || b.basePrice), 0) / 
+      this.buckets.filter(b => b.class === 'BUSINESS').length;
+
+    const prompt = `You are the Customer Sentiment Agent. Your role is to predict customer willingness to purchase airline tickets based on current market conditions, pricing, and demand signals.
+
+CURRENT MARKET CONDITIONS:
+- Route: ${this.environment.route}
+- Days to Departure: ${this.environment.daysToDeparture}
+- Current Occupancy: ${(currentOccupancy * 100).toFixed(1)}%
+- Seasonality Index: ${this.environment.seasonalityIndex}
+- Event Impact: ${this.environment.eventImpact || 'None'}
+- Competitor Aggressiveness: ${this.environment.competitorAggressiveness}
+
+CURRENT PRICING:
+- Average Economy Price: ₹${avgEconomyPrice.toLocaleString()}
+- Average Business Price: ₹${avgBusinessPrice.toLocaleString()}
+- Fare Buckets: ${this.buckets.map(b => `${b.code}(${b.class}): ₹${b.price || b.basePrice} - ${b.allocated - (b.sold || 0)} seats left`).join(', ')}
+
+COMPETITOR CONTEXT:
+${this.environment.competitors.map(c => `${c.name}: Base ₹${c.basePrice}`).join('\n')}
+
+${forecastResult ? `DEMAND FORECAST: ${forecastResult.decision} - ${forecastResult.reasoning}` : ''}
+${competitorResult ? `COMPETITOR ANALYSIS: ${competitorResult.decision}` : ''}
+
+Analyze customer sentiment and predict willingness to buy. Consider:
+1. Price sensitivity - Are current prices reasonable for the route and timing?
+2. Urgency perception - How does proximity to departure affect buying behavior?
+3. Value perception - How do customers perceive value vs competitors?
+4. Segment behavior - Different willingness for economy vs business travelers
+5. External factors - Events, seasonality, and market conditions
+
+RESPOND WITH JSON:
+{
+  "overallWillingness": 0.0-1.0,
+  "sentimentLabel": "VERY_HIGH|HIGH|MODERATE|LOW|VERY_LOW",
+  "economyWillingness": 0.0-1.0,
+  "businessWillingness": 0.0-1.0,
+  "priceElasticity": "HIGH|MEDIUM|LOW",
+  "urgencyEffect": "ACCELERATING|NEUTRAL|DAMPENING",
+  "keyDrivers": ["driver1", "driver2", "driver3"],
+  "riskFactors": ["risk1", "risk2"],
+  "recommendation": "How pricing should adapt based on customer sentiment",
+  "reasoning": "Detailed analysis of customer willingness to buy"
+}`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+
+      const parsed = JSON.parse(response.text || "{}");
+      const willingness = parsed.overallWillingness || 0.5;
+      const label = parsed.sentimentLabel || 'MODERATE';
+      
+      return {
+        agentType: 'sentiment',
+        success: true,
+        decision: `[${label}] Purchase willingness: ${(willingness * 100).toFixed(0)}% | Elasticity: ${parsed.priceElasticity || 'MEDIUM'}`,
+        reasoning: parsed.reasoning || "Standard sentiment analysis",
+        output: {
+          overallWillingness: willingness,
+          sentimentLabel: label,
+          economyWillingness: parsed.economyWillingness || willingness,
+          businessWillingness: parsed.businessWillingness || willingness * 0.7,
+          priceElasticity: parsed.priceElasticity || 'MEDIUM',
+          urgencyEffect: parsed.urgencyEffect || 'NEUTRAL',
+          keyDrivers: parsed.keyDrivers || [],
+          riskFactors: parsed.riskFactors || [],
+          recommendation: parsed.recommendation || ''
+        },
+        a2aMessages: []
+      };
+    } catch (e) {
+      return {
+        agentType: 'sentiment',
+        success: false,
+        decision: "[MODERATE] Purchase willingness: 50% | Elasticity: MEDIUM",
+        reasoning: "Default sentiment analysis due to error",
+        output: { 
+          overallWillingness: 0.5, 
+          sentimentLabel: 'MODERATE',
+          economyWillingness: 0.5,
+          businessWillingness: 0.35,
+          priceElasticity: 'MEDIUM',
+          urgencyEffect: 'NEUTRAL',
+          keyDrivers: [],
+          riskFactors: [],
+          recommendation: ''
+        },
+        a2aMessages: []
+      };
+    }
+  }
+
   private computeFinalOutcome(): { pricingApplied: boolean; allocationChanged: boolean; summary: string } {
     const pricingResult = this.subAgentResults.get('pricing');
     const allocationResult = this.subAgentResults.get('seat_allocation');
+    const sentimentResult = this.subAgentResults.get('sentiment');
 
     const pricingApplied = pricingResult?.success && 
       (pricingResult.output as { adjustmentType?: string })?.adjustmentType !== 'HOLD';
@@ -623,11 +742,15 @@ RESPOND WITH JSON:
 
     const agentsRun = this.subAgentResults.size;
     const successCount = Array.from(this.subAgentResults.values()).filter(r => r.success).length;
+    
+    const sentimentLabel = sentimentResult?.success 
+      ? (sentimentResult.output as { sentimentLabel?: string })?.sentimentLabel || 'N/A'
+      : 'N/A';
 
     return {
       pricingApplied: !!pricingApplied,
       allocationChanged: !!allocationChanged,
-      summary: `Executed ${agentsRun} agents (${successCount} successful). Pricing: ${pricingApplied ? 'Updated' : 'Unchanged'}. Allocation: ${allocationChanged ? 'Modified' : 'Unchanged'}.`
+      summary: `Executed ${agentsRun} agents (${successCount} successful). Pricing: ${pricingApplied ? 'Updated' : 'Unchanged'}. Allocation: ${allocationChanged ? 'Modified' : 'Unchanged'}. Customer Sentiment: ${sentimentLabel}.`
     };
   }
 }

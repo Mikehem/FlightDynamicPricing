@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import type { ReasoningLog } from "@shared/schema";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { BrainCircuit, Activity, LineChart, TrendingUp, TrendingDown, Minus, Fuel, Calendar, Users, Clock, Zap, Target, DollarSign, Armchair, ArrowUp, ArrowDown, Network, ArrowRight, Workflow, Layers } from "lucide-react";
+import { BrainCircuit, Activity, LineChart, TrendingUp, TrendingDown, Minus, Fuel, Calendar, Users, Clock, Zap, Target, DollarSign, Armchair, ArrowUp, ArrowDown, Network, ArrowRight, Workflow, Layers, HeartPulse } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface MultiplierData {
@@ -388,6 +388,7 @@ export function AgentLogs({ logs }: AgentLogsProps) {
     if (lowerName.includes('forecast')) return <LineChart className="w-3 h-3" />;
     if (lowerName.includes('seat') || lowerName.includes('allocation')) return <Armchair className="w-3 h-3" />;
     if (lowerName.includes('competitor')) return <Zap className="w-3 h-3" />;
+    if (lowerName.includes('sentiment')) return <HeartPulse className="w-3 h-3" />;
     return <BrainCircuit className="w-3 h-3" />;
   };
 
@@ -399,6 +400,7 @@ export function AgentLogs({ logs }: AgentLogsProps) {
     if (lowerName.includes('forecast')) return "bg-blue-500/10 text-blue-600 border-blue-300 dark:border-blue-700";
     if (lowerName.includes('seat') || lowerName.includes('allocation')) return "bg-cyan-500/10 text-cyan-600 border-cyan-300 dark:border-cyan-700";
     if (lowerName.includes('competitor')) return "bg-rose-500/10 text-rose-600 border-rose-300 dark:border-rose-700";
+    if (lowerName.includes('sentiment')) return "bg-pink-500/10 text-pink-600 border-pink-300 dark:border-pink-700";
     return "bg-slate-500/10 text-slate-600 border-slate-300 dark:border-slate-600";
   };
 
