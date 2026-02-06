@@ -180,7 +180,8 @@ export type SubAgentType =
   | 'forecast'       // Analyzes demand patterns
   | 'pricing'        // Calculates price multipliers
   | 'seat_allocation'// Manages seat bucket allocation
-  | 'competitor';    // Monitors competitor pricing
+  | 'competitor'     // Monitors competitor pricing
+  | 'sentiment';     // Predicts customer willingness to buy
 
 // A2A Message structure for inter-agent communication
 export interface A2AMessage {
