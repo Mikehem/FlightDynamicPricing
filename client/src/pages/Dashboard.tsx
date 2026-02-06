@@ -96,7 +96,7 @@ export default function Dashboard() {
             </div>
             <div>
               <h1 className="font-display font-bold text-lg leading-tight">Agentic Dynamic Pricing</h1>
-              <p className="text-xs text-muted-foreground font-mono">INDIGO • BLR → DXB</p>
+              <p className="text-xs text-muted-foreground font-mono">SKYPULSE • BLR → DXB</p>
             </div>
           </div>
           

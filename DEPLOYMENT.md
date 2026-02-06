@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is an AI-driven dynamic pricing simulator for airline ticketing, demonstrating a multi-agent architecture for the Indigo BLR to DXB route. The system uses multiple AI agents powered by Google Gemini to make and explain pricing decisions in real-time.
+This is an AI-driven dynamic pricing simulator for airline ticketing, demonstrating a multi-agent architecture for the SkyPulse Airlines BLR to DXB route. The system uses multiple AI agents powered by Google Gemini to make and explain pricing decisions in real-time.
 
 ## Technical Architecture
 

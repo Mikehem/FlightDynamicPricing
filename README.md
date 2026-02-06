@@ -1,6 +1,6 @@
 # Agentic Dynamic Pricing Platform
 
-An AI-driven dynamic pricing simulator for airline ticketing, demonstrating a multi-agent architecture for intelligent price optimization. The system simulates the Indigo Airlines BLR to DXB route using Google Gemini-powered agents that collaboratively analyze market conditions and set optimal prices in real-time.
+An AI-driven dynamic pricing simulator for airline ticketing, demonstrating a multi-agent architecture for intelligent price optimization. The system simulates the SkyPulse Airlines BLR to DXB route using Google Gemini-powered agents that collaboratively analyze market conditions and set optimal prices in real-time.
 
 ## Features
 

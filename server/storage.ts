@@ -75,7 +75,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "Bangalore to Dubai during IPL Final week. Cricket fans are traveling in droves to watch the match. Expect extremely high demand across all fare classes, especially premium economy and business. Competitors are already raising prices. We are 30 days into the 60-day booking window.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -106,7 +106,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "Sudden spike in Aviation Turbine Fuel (ATF) prices due to geopolitical tensions. Operating costs are up 40%. Competitors are hesitant to raise prices fearing demand destruction. Strategic pricing required to maintain margins. We are 15 days into the 60-day booking window.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -137,7 +137,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "Standard Tuesday departure in off-peak season. Low natural demand. Competitors are aggressively discounting to fill seats. Focus on maximizing load factor while protecting yield. Booking window just opened - 60 days to departure.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -168,7 +168,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "Flight departing in 3 days with only 45% seats sold (below forecast of 85%). Sudden corporate booking interest detected. Balance between capturing last-minute premium demand and filling remaining inventory. We are 57 days into the 60-day booking window.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -200,7 +200,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "The IPL Final has been cancelled due to unforeseen circumstances. Thousands of cricket fans are now cancelling their travel plans. Demand has crashed overnight. Most competitors are slashing prices. We are 25 days into the booking window with 55% seats already sold at premium prices.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -231,7 +231,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "Flight departing in 5 days with only 35% seats sold. No special events, weak organic demand. Need aggressive seat allocation optimization to maximize revenue from remaining inventory. Economy buckets need attention.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -262,7 +262,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "Severe sandstorm warning issued for Dubai. Weather forecasts predict possible flight delays or diversions. Some passengers are nervous and may not book. Competitors are maintaining prices but seeing lower conversions. 40 days to departure.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -293,7 +293,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "Akasa Air just launched a flash sale with 40% off on BLR-DXB route. Air India is matching the discount. Emirates holding firm on premium pricing. We need to decide: match discounts, hold prices, or find a middle ground. 45 days to departure.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -324,7 +324,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "Major technology expo happening in Dubai. Business travelers are booking premium seats. Economy demand is moderate but Business class is seeing unprecedented interest. 20 days to departure.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -355,7 +355,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "Ramadan period with mixed travel patterns. Some travelers heading to Dubai for religious observance while leisure travel is subdued. Unique demand curve with specific peaks. 50 days to departure.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -386,7 +386,7 @@ const SCENARIOS: ScenarioDef[] = [
     description: "Global oil prices have crashed 30% due to OPEC decisions. Fuel costs are down significantly. Competitors are slow to pass savings to customers. Opportunity to gain market share with competitive pricing or boost margins. 35 days to departure.",
     environment: {
       route: "BLR → DXB",
-      airline: "Indigo",
+      airline: "SkyPulse",
       aircraft: "Airbus A321 Neo",
       totalSeats: 192,
       bookingWindow: 60,
@@ -774,11 +774,11 @@ export class DatabaseStorage implements IStorage {
     
     // Enhanced Booking Agent prompt with structured flow
     const prompt = `
-      You are an Airline Booking Assistant for Indigo flight BLR-DXB (Bangalore to Dubai).
+      You are an Airline Booking Assistant for SkyPulse flight BLR-DXB (Bangalore to Dubai).
       
       FLIGHT DETAILS:
       - Route: BLR → DXB (Bangalore to Dubai)
-      - Airline: Indigo
+      - Airline: SkyPulse
       - Departure: ${session.departureDate ? new Date(session.departureDate).toLocaleDateString() : 'TBD'}
       - Total seats available: ${totalAvailable}
       
@@ -945,7 +945,7 @@ ${pricingReasoning}
 **Reference:** ${referenceCode}
 
 **Flight**
-BLR → DXB • Indigo
+BLR → DXB • SkyPulse
 ${session.departureDate ? new Date(session.departureDate).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : 'Date TBD'}
 
 **Passengers:** ${passengers}
